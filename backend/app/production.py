@@ -11,6 +11,19 @@ ASSET_TYPES = {'.js', '.css', '.svg', '.png', '.jpg', '.jpeg', '.webp', '.ico', 
 def create_app():
     if os.getenv('APP_MODE', 'local') != 'local':
         raise ValueError('Phase 5B.1 production serving is loopback-only; LAN requires Phase 5B.2')
+    return _serve_production_assets()
+
+
+def create_lan_app():
+    """Separate entrypoint: LAN never gets the local operator bypass."""
+    if os.getenv('APP_MODE') != 'lan':
+        raise ValueError('HTTPS LAN production requires explicit APP_MODE=lan')
+    from .security import Security
+    Security()  # Fail before serving any assets if LAN authentication is unconfigured.
+    return _serve_production_assets()
+
+
+def _serve_production_assets():
     root = Path(__file__).resolve().parents[2] / 'frontend' / 'dist'
     # This factory has no arbitrary filesystem/static root configuration.
     if root.is_symlink() or (root/'assets').is_symlink() or (root/'index.html').is_symlink():

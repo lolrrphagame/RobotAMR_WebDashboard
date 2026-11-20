@@ -112,6 +112,25 @@ def test_login_rate_limit_and_http_tls_requirement(lan):
     assert lan.get('http://robot.test/api/health').status_code==403
 
 
+def test_session_expiration_closes_owner_and_rejects_mutations(lan):
+    from starlette.websockets import WebSocketDisconnect
+    headers={'origin':'https://robot.test'}
+    assert lan.post('/api/auth/login',json={'password':'test-password'},headers=headers).status_code==200
+    csrf=lan.get('/api/auth/session').json()['csrf']
+    with lan.websocket_connect('wss://robot.test/ws/telemetry',headers=headers) as ws:
+        ws.receive_json();ws.send_json({'type':'control','linear':.1})
+        for _ in range(20):
+            frame=ws.receive_json()
+            if frame['type']=='telemetry' and frame['mode']=='MANUAL':break
+        assert app.state.robot.owner is not None
+        for session in app.state.security.sessions.values():session['expires']=0
+        with pytest.raises(WebSocketDisconnect):
+            while True:ws.receive_json()
+    assert app.state.robot.rpm==[0,0] and app.state.robot.owner is None
+    assert lan.post('/api/configuration',json={'type':'configuration','action':'reset_home'},headers={**headers,'x-csrf-token':csrf}).status_code==401
+    assert lan.get('/api/auth/session').json()['role']=='observer'
+
+
 def test_backup_and_legacy_schema_preserve_data(tmp_path):
     import json
     from app.operations import DefinitionStore
