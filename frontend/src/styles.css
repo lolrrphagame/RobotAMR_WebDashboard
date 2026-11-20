@@ -1269,3 +1269,498 @@ h1 {
     font-size: 25px;
   }
 }
+/* Phase 2: shared pose readout and simulation navigation workspace. */
+.pose-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 20px;
+  padding: 19px 22px;
+  gap: 20px;
+}
+.pose-strip > div {
+  min-width: 0;
+}
+.pose-strip span {
+  display: block;
+  color: #8099b5;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+}
+.pose-strip strong {
+  display: block;
+  font-size: 16px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: #cde9f8;
+}
+.mission-state {
+  text-transform: uppercase;
+}
+.mission-state.running {
+  color: #4ed9c1;
+}
+.mission-state.paused,
+.mission-state.blocked {
+  color: #edbd70;
+}
+.navigation-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 350px;
+  gap: 20px;
+  margin-bottom: 25px;
+}
+.navigation-main,
+.navigation-side {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.map-panel .panel-heading {
+  padding-bottom: 17px;
+}
+.map-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 15px;
+  background: #0e1a2b;
+  border-block: 1px solid #26374b;
+}
+.tool-group {
+  display: flex;
+  gap: 5px;
+}
+.tool-group button,
+.nav-action-grid button,
+.waypoint-buttons button,
+.use-pose,
+.run-sequence,
+.sequence-list button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid #30435c;
+  color: #a8bdd7;
+  background: #17273c;
+  border-radius: 6px;
+  padding: 9px 10px;
+  font-size: 12px;
+}
+.tool-group button.active {
+  color: #5dd9ec;
+  border-color: #29788d;
+  background: #123c4c;
+}
+.tool-group button:hover,
+.nav-action-grid button:hover,
+.waypoint-buttons button:hover,
+.use-pose:hover {
+  background: #203a51;
+}
+.navigation-map {
+  width: 100%;
+  aspect-ratio: 4/3;
+  display: block;
+  background: radial-gradient(ellipse at center, #14233a, #0a1321);
+  touch-action: none;
+  user-select: none;
+  cursor: crosshair;
+}
+.navigation-map.tool-pan {
+  cursor: grab;
+}
+.navigation-map:active {
+  cursor: grabbing;
+}
+.map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 15px 18px 9px;
+  color: #8ea5c0;
+  font-size: 12px;
+}
+.map-legend span {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.map-legend i {
+  width: 13px;
+  height: 3px;
+  display: inline-block;
+}
+.legend-robot {
+  background: #4fe6f4;
+}
+.legend-path {
+  background: #6c9bff;
+}
+.legend-trail {
+  background: #29c6b3;
+}
+.map-legend span:last-child {
+  margin-left: auto;
+  color: #607d9f;
+}
+.map-hint {
+  font-size: 12px;
+  color: #7490b0;
+  line-height: 1.7;
+  padding: 0 18px 18px;
+}
+.nav-body {
+  padding: 20px;
+}
+.goal-coordinates {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.goal-coordinates label {
+  font-size: 12px;
+  color: #91a9c4;
+}
+.goal-coordinates input {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid #30415b;
+  border-radius: 6px;
+  background: #0b1728;
+  color: #d6e8fa;
+  font-variant-numeric: tabular-nums;
+  font-size: 15px;
+}
+.heading-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #90aac6;
+  margin: 20px 0 12px;
+}
+.heading-label strong {
+  color: #e7bd78;
+  font-size: 14px;
+  font-weight: 500;
+}
+.nav-controls input[type="range"] {
+  width: 100%;
+  accent-color: #e6b065;
+  height: 5px;
+  display: block;
+  margin: 0;
+}
+.nav-heading-ticks {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #7690ad;
+  margin: 12px 0 22px;
+}
+.nav-action-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.nav-action-grid button {
+  font-size: 12px;
+  padding: 11px 7px;
+}
+.nav-action-grid .primary-action,
+.primary-action {
+  background: #12445a;
+  border: 1px solid #287b92;
+  color: #67deef;
+}
+.navigation-stop {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 9px;
+  background: #44212e;
+  color: #fc91a2;
+  border: 1px solid #7d3e51;
+  border-radius: 7px;
+  padding: 13px 10px;
+  width: 100%;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin: 12px 0;
+}
+.simulation-banner .navigation-stop {
+  width: auto;
+  margin: 0 0 0 auto;
+  padding: 5px 12px;
+}
+.mission-details {
+  border-block: 1px solid #24364e;
+  margin-top: 20px;
+  padding: 14px 0;
+  display: grid;
+  gap: 14px;
+}
+.mission-details > div {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  align-items: baseline;
+  color: #829dbb;
+  font-size: 12px;
+}
+.mission-details strong {
+  color: #c4d9ed;
+  font-weight: 500;
+  text-align: right;
+  font-size: 12px;
+}
+.mission-details > div:first-child strong {
+  text-transform: uppercase;
+  color: #5ed3df;
+}
+.nav-progress {
+  margin-top: 18px;
+}
+.nav-progress > div {
+  display: flex;
+  justify-content: space-between;
+  color: #8ca7c5;
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+.nav-progress strong {
+  color: #5bd4de;
+  font-weight: 500;
+}
+.nav-progress progress {
+  width: 100%;
+  height: 5px;
+  display: block;
+  border: 0;
+  border-radius: 5px;
+  overflow: hidden;
+  background: #20354c;
+  accent-color: #32c9cf;
+}
+.nav-progress progress::-webkit-progress-bar {
+  background: #20354c;
+}
+.nav-progress progress::-webkit-progress-value {
+  background: #32c9cf;
+}
+.mission-reason {
+  font-size: 12px;
+  color: #90a9c3;
+  line-height: 1.7;
+  padding: 15px 0 0;
+}
+.waypoint-panel .muted {
+  font-size: 12px;
+}
+.use-pose {
+  width: 100%;
+  margin-top: 12px;
+  padding: 9px;
+  font-size: 12px;
+}
+.waypoint-list {
+  margin-top: 16px;
+}
+.waypoint-row {
+  padding: 15px 0;
+  border-bottom: 1px solid #24354c;
+}
+.waypoint-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: #cadced;
+}
+.waypoint-letter {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  background: #222f51;
+  color: #aeb4ff;
+  border: 1px solid #425584;
+  border-radius: 7px;
+  font-size: 13px;
+}
+.waypoint-info small {
+  display: block;
+  color: #7e96b2;
+  font-size: 11px;
+  margin-top: 4px;
+}
+.waypoint-buttons {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+.waypoint-buttons button {
+  flex: 1;
+  padding: 7px;
+}
+.sequence-label {
+  display: flex;
+  justify-content: space-between;
+  color: #9ab0cb;
+  font-size: 13px;
+  margin-top: 20px;
+}
+.sequence-label span {
+  color: #6c86a7;
+  font-size: 11px;
+}
+.sequence-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 13px 0 17px;
+  min-height: 50px;
+}
+.sequence-list > span {
+  font-size: 12px;
+  color: #7c95b3;
+}
+.sequence-list button {
+  padding: 6px 10px;
+  background: #1d2e4d;
+  color: #a9baff;
+}
+.run-sequence {
+  width: 100%;
+  padding: 11px;
+}
+.navigation-disclaimer {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  color: #6e94ad;
+  padding: 0 5px;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.navigation-disclaimer svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.nav-events .events {
+  height: 260px;
+}
+.map-loading {
+  min-height: 420px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #a2b7cf;
+  font-size: 14px;
+  padding: 25px;
+}
+@media (min-width: 1600px) {
+  .navigation-layout {
+    grid-template-columns: minmax(0, 1fr) 390px;
+  }
+  .navigation-map {
+    aspect-ratio: 1.3;
+  }
+}
+@media (max-width: 1200px) {
+  .navigation-layout {
+    grid-template-columns: minmax(0, 1fr) 310px;
+  }
+  .map-toolbar {
+    flex-wrap: wrap;
+  }
+  .tool-group button {
+    font-size: 11px;
+    padding: 8px;
+  }
+  .pose-strip {
+    padding: 16px;
+    gap: 12px;
+  }
+  .pose-strip span {
+    font-size: 10px;
+  }
+  .pose-strip strong {
+    font-size: 14px;
+  }
+}
+@media (max-width: 1000px) {
+  .navigation-layout {
+    grid-template-columns: 1fr;
+  }
+  .navigation-side {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+  .navigation-disclaimer {
+    grid-column: 1/-1;
+  }
+  .pose-strip {
+    grid-template-columns: 1fr 1fr;
+  }
+  .navigation-map {
+    max-height: 650px;
+  }
+  .map-toolbar {
+    flex-wrap: nowrap;
+  }
+}
+@media (max-width: 650px) {
+  .navigation-side {
+    display: flex;
+  }
+  .pose-strip {
+    gap: 17px;
+  }
+  .pose-strip strong {
+    font-size: 15px;
+  }
+  .map-toolbar {
+    flex-wrap: wrap;
+  }
+  .map-legend {
+    font-size: 11px;
+    gap: 10px;
+  }
+  .map-legend span:last-child {
+    margin-left: 0;
+  }
+  .navigation-map {
+    aspect-ratio: 1;
+  }
+  .map-panel .panel-heading {
+    flex-wrap: wrap;
+  }
+  .map-panel h2 {
+    font-size: 15px;
+  }
+  .nav-action-grid button {
+    font-size: 13px;
+  }
+  .nav-body {
+    padding: 20px;
+  }
+  .mission-details > div,
+  .mission-details strong,
+  .mission-reason,
+  .waypoint-panel .muted {
+    font-size: 13px;
+  }
+}
+@media (max-width: 1000px) {
+  .navigation-main { display: contents; }
+  .navigation-side { order: 1; }
+  .nav-events { order: 2; }
+}

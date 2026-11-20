@@ -7,7 +7,7 @@ from uuid import uuid4
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError
-from .models import ControlCommand
+from .models import command_adapter
 from .simulator import RobotSimulator
 
 @asynccontextmanager
@@ -36,8 +36,12 @@ def health():
     return {"status": "ok", "simulation": True, "hardware_enabled": False}
 
 @app.get("/api/robot/status")
-def status():
+async def status():
     return app.state.robot.snapshot()
+
+@app.get("/api/map")
+async def map_data():
+    return app.state.robot.grid.snapshot()
 
 @app.websocket("/ws/telemetry")
 async def telemetry(socket: WebSocket):
@@ -53,12 +57,20 @@ async def telemetry(socket: WebSocket):
                 raw = await socket.receive_text()
                 if len(raw) > 2048:
                     raise ValueError("Command too large")
-                command = ControlCommand.model_validate(json.loads(raw))
+                command = command_adapter.validate_python(json.loads(raw))
                 if not robot.command(command, client):
-                    await socket.send_json({"type": "error", "message": "Another simulation client holds control."})
-            except (ValidationError, ValueError, json.JSONDecodeError):
+                    await socket.send_json({"type": "error", "message": "Control is reserved by another client or mode. Cancel autonomous navigation before manual driving."})
+                elif command.type not in ("heartbeat", "control", "release"):
+                    await socket.send_json({"type": "ack"})
+            except ValidationError:
                 robot.disconnect(client)
                 await socket.send_json({"type": "error", "message": "Invalid control command. Controller commands cleared."})
+            except json.JSONDecodeError:
+                robot.disconnect(client)
+                await socket.send_json({"type": "error", "message": "Invalid control command. Controller commands cleared."})
+            except ValueError as exc:
+                robot.disconnect(client)
+                await socket.send_json({"type": "error", "message": str(exc)[:180]})
     async def send():
         while True:
             await socket.send_json(robot.snapshot())
@@ -68,10 +80,11 @@ async def telemetry(socket: WebSocket):
         done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
         for task in done:
             task.result()
-    except (WebSocketDisconnect, RuntimeError, OSError):
+    except (WebSocketDisconnect, RuntimeError, OSError, asyncio.CancelledError):
         pass
     finally:
+        robot.disconnect(client)
         for task in tasks:
             task.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
-        robot.disconnect(client)
+        with suppress(asyncio.CancelledError):
+            await asyncio.gather(*tasks, return_exceptions=True)

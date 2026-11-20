@@ -30,7 +30,7 @@ test("telemetry, hold-to-drive, release, focus loss and page changes", async ({
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await expect(page.getByText("0.0435 m", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Navigation", exact: true }).click();
-  await expect(page.getByText("FUTURE PHASE", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("navigation-map")).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -79,4 +79,110 @@ test("disconnected service clears controls and marks telemetry stale", async ({
     timeout: 10000,
   });
   await expect(page.getByTestId("operating-mode")).toHaveText("STANDBY");
+});
+
+test("navigation map, heading, waypoints, arbitration and synchronized pose", async ({
+  page,
+}, testInfo) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto("/");
+  await expect(page.getByText("Stream connected")).toBeVisible();
+  await page.getByRole("button", { name: "Navigation", exact: true }).click();
+  const map = page.getByTestId("navigation-map");
+  await expect(map).toBeVisible();
+  // Use the SVG screen transform, independent of viewport size/zoom.
+  const point = await map.evaluate((node) => {
+    const matrix = (node as SVGSVGElement).getScreenCTM()!;
+    const p = new DOMPoint(2, -1).matrixTransform(matrix);
+    return { x: p.x, y: p.y };
+  });
+  await page.mouse.click(point.x, point.y);
+  await expect(page.getByLabel("X position (m)")).toHaveValue("2");
+  await page.getByLabel("Target heading", { exact: true }).fill("90");
+  await page
+    .getByRole("button", { name: "Save waypoint A", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Add A to sequence", exact: true }),
+  ).toBeEnabled();
+  await page
+    .getByRole("button", { name: "Add A to sequence", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Plan path", exact: true }).click();
+  await expect(page.getByTestId("navigation-status")).toHaveText("ready");
+  await expect(page.getByTestId("planned-path")).not.toHaveAttribute(
+    "points",
+    "",
+  );
+  await page.screenshot({
+    path: testInfo.outputPath("navigation-desktop.png"),
+    fullPage: true,
+  });
+  await page
+    .getByRole("button", { name: "Start navigation", exact: true })
+    .click();
+  await expect(page.getByTestId("navigation-status")).toHaveText("running");
+  await expect
+    .poll(async () =>
+      page.getByTestId("virtual-robot").getAttribute("transform"),
+    )
+    .not.toContain("translate(1 -1)");
+  await page.getByRole("button", { name: "Pause", exact: true }).click();
+  await expect(page.getByTestId("navigation-status")).toHaveText("paused");
+  const stoppedPose = await page.getByTestId("robot-position").textContent();
+  await page.getByRole("button", { name: "Overview", exact: true }).click();
+  await expect(page.getByTestId("robot-position")).toHaveText(stoppedPose!);
+  await expect(page.getByTestId("operating-mode")).toHaveText("AUTONOMOUS");
+  await expect(
+    page.getByRole("button", { name: "Forward", exact: true }),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "Navigation", exact: true }).click();
+  await expect(page.getByTestId("navigation-status")).toHaveText("paused");
+  await page.getByRole("button", { name: "Resume", exact: true }).click();
+  await expect(page.getByTestId("navigation-status")).toHaveText("running");
+  await page
+    .getByRole("button", { name: "STOP · CANCEL ALL MOTION", exact: true })
+    .click();
+  await expect(page.getByTestId("navigation-status")).toHaveText("cancelled");
+  await page.getByRole("button", { name: "Return home", exact: true }).click();
+  await expect(page.getByTestId("navigation-status")).toHaveText("running");
+  await page
+    .getByRole("button", { name: "Cancel mission", exact: true })
+    .click();
+  await expect(page.getByTestId("navigation-status")).toHaveText("cancelled");
+  expect(errors).toEqual([]);
+});
+
+test("navigation mobile map tools and invalid destinations", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await expect(page.getByText("Stream connected")).toBeAttached();
+  await page.getByRole("button", { name: "Navigation", exact: true }).click();
+  await expect(page.getByTestId("navigation-map")).toBeVisible();
+  await page.getByRole("button", { name: "Zoom in", exact: true }).click();
+  await page.getByRole("button", { name: "Zoom out", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Reset map view", exact: true })
+    .click();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: testInfo.outputPath("navigation-mobile.png"),
+    fullPage: true,
+  });
+  await page.getByLabel("X position (m)").fill("3.4");
+  await page.getByLabel("Y position (m)").fill("2");
+  await page
+    .getByRole("button", { name: "Start navigation", exact: true })
+    .click();
+  await expect(
+    page.getByText(/Destination or robot position has insufficient/),
+  ).toBeVisible();
+  await expect(page.getByTestId("navigation-status")).not.toHaveText("running");
 });

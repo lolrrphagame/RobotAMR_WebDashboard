@@ -58,8 +58,8 @@ export function RpmChart({
               axisLine={false}
             />
             <YAxis
-              domain={[-160, 160]}
-              ticks={[-150, -75, 0, 75, 150]}
+              domain={[-45, 45]}
+              ticks={[-40, -20, 0, 20, 40]}
               stroke="#8191ab"
               tick={{ fontSize: 12 }}
               tickLine={false}

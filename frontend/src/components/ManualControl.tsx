@@ -5,31 +5,37 @@ import {
   ArrowUp,
   Square,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Command } from "../types";
 export function ManualControl({
   connected,
   send,
   stop,
+  release: releaseInput,
 }: {
   connected: boolean;
   send: (c: Command) => void;
   stop: () => void;
+  release: () => void;
 }) {
-  const [linear, setLinear] = useState(0.25);
-  const [angular, setAngular] = useState(0.8);
+  const [linear, setLinear] = useState(0.12);
+  const [angular, setAngular] = useState(0.6);
   const [active, setActive] = useState("");
+  const held = useRef(false);
   const release = () => {
+    held.current = false;
     setActive("");
-    stop();
+    releaseInput();
   };
   useEffect(() => {
     if (!connected) setActive("");
   }, [connected]);
   useEffect(() => {
     const halt = () => {
+      if (!held.current) return;
+      held.current = false;
       setActive("");
-      stop();
+      releaseInput();
     };
     const key = (event: KeyboardEvent) => {
       if (
@@ -39,6 +45,7 @@ export function ManualControl({
       ) {
         event.preventDefault();
         halt();
+        stop();
       }
     };
     window.addEventListener("pointerup", halt);
@@ -50,9 +57,9 @@ export function ManualControl({
       window.removeEventListener("pointercancel", halt);
       window.removeEventListener("blur", halt);
       window.removeEventListener("keydown", key);
-      stop();
+      releaseInput();
     };
-  }, [stop]);
+  }, [stop, releaseInput]);
   const buttons = [
     { id: "forward", label: "Forward", Icon: ArrowUp, v: linear, w: 0 },
     { id: "left", label: "Rotate left", Icon: ArrowLeft, v: 0, w: angular },
@@ -81,6 +88,7 @@ export function ManualControl({
               if (e.button !== 0) return;
               e.preventDefault();
               e.currentTarget.setPointerCapture(e.pointerId);
+              held.current = true;
               setActive(id);
               send({ type: "control", linear: v, angular: w });
             }}
@@ -90,6 +98,7 @@ export function ManualControl({
             onKeyDown={(e) => {
               if ((e.key === "Enter" || e.key === " ") && !e.repeat) {
                 e.preventDefault();
+                held.current = true;
                 setActive(id);
                 send({ type: "control", linear: v, angular: w });
               }
@@ -102,7 +111,10 @@ export function ManualControl({
         ))}
         <button
           className="stop"
-          onClick={release}
+          onClick={() => {
+            release();
+            stop();
+          }}
           aria-label="Stop simulated robot"
         >
           <Square size={16} fill="currentColor" />
@@ -118,9 +130,9 @@ export function ManualControl({
       <input
         id="linear"
         type="range"
-        min="0.05"
-        max="0.6"
-        step="0.05"
+        min="0.02"
+        max="0.18"
+        step="0.01"
         value={linear}
         onChange={(e) => {
           release();
@@ -128,8 +140,8 @@ export function ManualControl({
         }}
       />
       <div className="range-ticks">
-        <span>0.05 m/s</span>
-        <span>0.60 m/s</span>
+        <span>0.02 m/s</span>
+        <span>0.18 m/s</span>
       </div>
       <label className="slider-label" htmlFor="angular">
         Angular speed{" "}
@@ -141,7 +153,7 @@ export function ManualControl({
         id="angular"
         type="range"
         min="0.2"
-        max="2"
+        max="1.2"
         step="0.1"
         value={angular}
         onChange={(e) => {
@@ -151,11 +163,11 @@ export function ManualControl({
       />
       <div className="range-ticks">
         <span>0.2 rad/s</span>
-        <span>2.0 rad/s</span>
+        <span>1.2 rad/s</span>
       </div>
       <div className="safety-note">
         <span className="status-dot" />
-        600 ms command watchdog · simulation only
+        40 RPM wheel limit · simulation only
       </div>
     </section>
   );

@@ -20,6 +20,8 @@ import {
   Zap,
 } from "lucide-react";
 import { useState } from "react";
+import { NavigationPage } from "./components/NavigationPage";
+import { MissionSummary } from "./components/MissionSummary";
 import { ManualControl } from "./components/ManualControl";
 import { RpmChart } from "./components/RpmChart";
 import { useRobot } from "./hooks/useRobot";
@@ -32,7 +34,7 @@ const pages = [
 ];
 function App() {
   const [page, setPage] = useState("Overview");
-  const { data, history, connection, error, send, stop } = useRobot();
+  const { data, history, connection, error, send, stop, release } = useRobot();
   const connected = connection === "connected";
   const live = connected ? data : null;
   const value = (n: number | undefined, decimals = 2) =>
@@ -50,7 +52,7 @@ function App() {
           </span>
         </a>
         <div className="workspace-label">
-          WORKSPACE <span>PHASE 01</span>
+          WORKSPACE <span>PHASE 02</span>
         </div>
         <nav aria-label="Main navigation">
           {pages.map(({ name, icon: Icon }) => (
@@ -58,7 +60,7 @@ function App() {
               key={name}
               className={page === name ? "nav-item selected" : "nav-item"}
               onClick={() => {
-                stop();
+                release();
                 setPage(name);
               }}
             >
@@ -127,7 +129,7 @@ function App() {
               <strong>Simulation environment active.</strong> All telemetry and
               controls are simulated. ROS 2, UART and GPIO are disabled.
             </span>
-            <span className="banner-phase">PHASE 1</span>
+            <span className="banner-phase">PHASE 2</span>
           </div>
           {(!connected || error) && (
             <div className="connection-alert" role="status">
@@ -145,6 +147,16 @@ function App() {
           )}
           {(page === "Overview" || page === "Manual Control") && (
             <>
+              <MissionSummary data={live} />
+              {live?.mode === "AUTONOMOUS" && (
+                <div className="simulation-banner">
+                  Autonomous mode owns motion. Cancel the mission on Navigation
+                  or press STOP before manual driving.{" "}
+                  <button className="navigation-stop" onClick={stop}>
+                    STOP
+                  </button>
+                </div>
+              )}
               <div className="telemetry-grid">
                 <article className="metric panel">
                   <div className="metric-label">
@@ -217,7 +229,12 @@ function App() {
                   <RpmChart history={connected ? history : []} motor="left" />
                   <RpmChart history={connected ? history : []} motor="right" />
                 </div>
-                <ManualControl connected={connected} send={send} stop={stop} />
+                <ManualControl
+                  connected={connected && live?.mode !== "AUTONOMOUS"}
+                  send={send}
+                  stop={stop}
+                  release={release}
+                />
               </div>
             </>
           )}
@@ -358,24 +375,12 @@ function App() {
             </section>
           )}
           {page === "Navigation" && (
-            <section className="panel empty-state">
-              <div className="radar">
-                <Radio size={56} />
-              </div>
-              <span className="tag">FUTURE PHASE</span>
-              <h2>Navigation awaits its next mission</h2>
-              <p>
-                Mapping, LiDAR, camera feeds and goal planning are reserved for
-                a later ROS 2 integration phase. No sensor or navigation
-                connection is active.
-              </p>
-              <button
-                className="secondary-button"
-                onClick={() => setPage("Overview")}
-              >
-                Return to overview
-              </button>
-            </section>
+            <NavigationPage
+              data={live}
+              connected={connected}
+              send={send}
+              stop={stop}
+            />
           )}
           {page === "Settings" && (
             <section className="panel details-panel">
@@ -389,6 +394,13 @@ function App() {
               <div className="detail-grid">
                 {[
                   ["Wheel radius", "0.0435 m"],
+                  ["Wheel speed limit", "40 RPM per wheel"],
+                  ["Chassis", "250 × 250 mm · two wheels + caster"],
+                  [
+                    "Encoder polarity (raw)",
+                    live?.drive.encoder_polarity.join(", ") ?? "+1, +1",
+                  ],
+                  ["Autonomous heartbeat timeout", "1.5 s"],
                   ["Wheel separation", "0.300 m"],
                   ["Encoder resolution", "≈ 3,960 counts/rev"],
                   ["Telemetry rate", "10 Hz"],
@@ -406,7 +418,7 @@ function App() {
                 ))}
               </div>
               <p className="muted">
-                Configuration is fixed for Phase 1. No hardware adapters are
+                Configuration is fixed for Phase 2. No hardware adapters are
                 installed or invoked.
               </p>
             </section>
@@ -421,7 +433,7 @@ function App() {
                 ? `${Math.floor(live.uptime / 60)}m ${live.uptime % 60}s`
                 : "—"}
               <span className="footer-divider">|</span>
-              <CircleHelp size={14} /> Phase 1 · v1.0
+              <CircleHelp size={14} /> Phase 2 · v2.0
             </span>
           </footer>
         </div>

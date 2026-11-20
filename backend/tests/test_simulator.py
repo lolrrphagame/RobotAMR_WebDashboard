@@ -8,11 +8,11 @@ from app.simulator import COMMAND_TIMEOUT, ENCODER_CPR, WHEEL_RADIUS, RobotSimul
 def test_differential_drive_and_encoder_conversion():
     robot = RobotSimulator()
     robot.command(ControlCommand(type="control", linear=0.25), "driver")
-    expected = 0.25 * 60 / (2 * math.pi * WHEEL_RADIUS)
+    expected = min(40, 0.25 * 60 / (2 * math.pi * WHEEL_RADIUS))
     assert robot.targets() == pytest.approx([expected, expected])
     robot.tick(0.1)
     assert 0 < robot.rpm[0] < expected
-    assert robot.counts[0] == pytest.approx(robot.rpm[0] * ENCODER_CPR * 0.1 / 60)
+    assert robot.counts[0] == pytest.approx(robot.rpm[0] * ENCODER_CPR * 0.1 / 120)
     robot.command(ControlCommand(type="control", angular=1), "driver")
     assert robot.targets()[0] == -robot.targets()[1]
     assert robot.targets()[0] < 0

@@ -11,11 +11,17 @@ export function useRobot() {
   const socket = useRef<WebSocket | null>(null);
   const command = useRef<Command>({ type: "stop" });
   const send = useCallback((next: Command) => {
-    command.current = next;
+    if (
+      next.type === "control" ||
+      next.type === "stop" ||
+      next.type === "release"
+    )
+      command.current = next;
     if (socket.current?.readyState === WebSocket.OPEN)
       socket.current.send(JSON.stringify(next));
   }, []);
   const stop = useCallback(() => send({ type: "stop" }), [send]);
+  const release = useCallback(() => send({ type: "release" }), [send]);
   useEffect(() => {
     let disposed = false;
     let retry: ReturnType<typeof setTimeout>;
@@ -34,6 +40,10 @@ export function useRobot() {
       ws.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data);
+          if (message.type === "ack") {
+            setError("");
+            return;
+          }
           if (message.type === "error") {
             command.current = { type: "stop" };
             setError(message.message);
@@ -86,26 +96,27 @@ export function useRobot() {
           socket.current.close();
           return;
         }
+        socket.current.send(JSON.stringify({ type: "heartbeat" }));
         if (command.current.type === "control")
           socket.current.send(JSON.stringify(command.current));
       }
     }, 150);
     const hidden = () => {
-      if (document.hidden) stop();
+      if (document.hidden) release();
     };
-    window.addEventListener("blur", stop);
-    window.addEventListener("pagehide", stop);
+    window.addEventListener("blur", release);
+    window.addEventListener("pagehide", release);
     document.addEventListener("visibilitychange", hidden);
     return () => {
       disposed = true;
       clearTimeout(retry);
       clearInterval(heartbeat);
-      stop();
+      release();
       socket.current?.close();
-      window.removeEventListener("blur", stop);
-      window.removeEventListener("pagehide", stop);
+      window.removeEventListener("blur", release);
+      window.removeEventListener("pagehide", release);
       document.removeEventListener("visibilitychange", hidden);
     };
-  }, [stop]);
-  return { data, history, connection, error, send, stop };
+  }, [stop, release]);
+  return { data, history, connection, error, send, stop, release };
 }
