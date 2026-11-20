@@ -10,6 +10,7 @@ import {
   Gauge,
   LayoutDashboard,
   Radio,
+  Radar,
   Settings,
   ShieldCheck,
   Terminal,
@@ -27,11 +28,14 @@ import { NavigationPage } from "./components/NavigationPage";
 import { MissionSummary } from "./components/MissionSummary";
 import { ManualControl } from "./components/ManualControl";
 import { RpmChart } from "./components/RpmChart";
+import { useSensors } from "./hooks/useSensors";
+import { SensorsPage } from "./components/SensorsPage";
 import { useRobot } from "./hooks/useRobot";
 const pages = [
   { name: "Overview", icon: LayoutDashboard },
   { name: "Manual Control", icon: Compass },
   { name: "Navigation", icon: Radio },
+  { name: "Sensors", icon: Radar },
   { name: "Diagnostics", icon: Activity },
   { name: "Settings", icon: Settings },
 ];
@@ -47,6 +51,7 @@ function App() {
     stop,
     release,
   } = useRobot();
+  const sensors = useSensors(page === "Sensors" || page === "Navigation");
   const connected = connection === "connected";
   const live = connected ? data : null;
   const value = (n: number | undefined, decimals = 2) =>
@@ -64,7 +69,7 @@ function App() {
           </span>
         </a>
         <div className="workspace-label">
-          WORKSPACE <span>PHASE 03</span>
+          WORKSPACE <span>PHASE 4A</span>
         </div>
         <nav aria-label="Main navigation">
           {pages.map(({ name, icon: Icon }) => (
@@ -141,7 +146,7 @@ function App() {
               <strong>Simulation environment active.</strong> All telemetry and
               controls are simulated. ROS 2, UART and GPIO are disabled.
             </span>
-            <span className="banner-phase">PHASE 3</span>
+            <span className="banner-phase">PHASE 4A</span>
           </div>
           {(!connected || error) && (
             <div className="connection-alert" role="status">
@@ -381,8 +386,23 @@ function App() {
               events={data?.events ?? []}
             />
           )}
+          {page === "Sensors" && (
+            <SensorsPage
+              bundle={sensors.bundle}
+              connection={sensors.connection}
+              error={sensors.error}
+              now={sensors.now}
+            />
+          )}
           {page === "Navigation" && (
             <NavigationPage
+              lidar={
+                sensors.state === "READY" &&
+                sensors.bundle &&
+                sensors.bundle.session_id === live?.session_id
+                  ? sensors.bundle.lidar
+                  : null
+              }
               data={live}
               connected={connected}
               send={send}
@@ -444,7 +464,7 @@ function App() {
                 ? `${Math.floor(live.uptime / 60)}m ${live.uptime % 60}s`
                 : "—"}
               <span className="footer-divider">|</span>
-              <CircleHelp size={14} /> Phase 3 · v3.0
+              <CircleHelp size={14} /> Phase 4A · v4.0a
             </span>
           </footer>
         </div>

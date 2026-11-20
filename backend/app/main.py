@@ -149,3 +149,56 @@ async def telemetry(socket: WebSocket):
             task.cancel()
         with suppress(asyncio.CancelledError):
             await asyncio.gather(*tasks, return_exceptions=True)
+
+
+@app.get("/api/sensors")
+async def sensors():
+    return {"session_id": app.state.robot.session_id, **app.state.robot.sensors.snapshot(include_data=False)}
+
+
+@app.get("/api/sensors/lidar")
+async def lidar():
+    return app.state.robot.sensors.snapshot()["lidar"]
+
+
+@app.get("/api/sensors/camera")
+async def camera():
+    return app.state.robot.sensors.snapshot()["camera"]
+
+
+@app.websocket("/ws/sensors")
+async def sensor_stream(socket: WebSocket):
+    if socket.headers.get("origin") not in origins and socket.headers.get("origin") is not None:
+        await socket.close(code=1008)
+        return
+    await socket.accept()
+    robot = app.state.robot
+
+    async def publish():
+        previous = None
+        while True:
+            bundle = robot.sensors.snapshot()
+            signature = tuple((bundle[name]["sequence"], bundle[name]["status"], bundle[name]["error"])
+                              for name in ("lidar", "camera"))
+            if signature != previous:
+                await socket.send_json({"type": "sensors", "simulation": True,
+                                        "session_id": robot.session_id, **bundle})
+                previous = signature
+            await asyncio.sleep(0.2)
+
+    async def receive():
+        await socket.receive_text()
+        await socket.close(code=1008, reason="Read-only sensor stream; controls use /ws/telemetry")
+
+    tasks = [asyncio.create_task(publish()), asyncio.create_task(receive())]
+    try:
+        done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        for task in done:
+            task.result()
+    except (WebSocketDisconnect, RuntimeError, OSError, asyncio.CancelledError):
+        pass
+    finally:
+        for task in tasks:
+            task.cancel()
+        with suppress(asyncio.CancelledError):
+            await asyncio.gather(*tasks, return_exceptions=True)

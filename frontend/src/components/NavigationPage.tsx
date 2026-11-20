@@ -1,3 +1,4 @@
+import type { LidarFrame } from "../sensors";
 import { useEffect, useState } from "react";
 import {
   Flag,
@@ -26,12 +27,15 @@ export function NavigationPage({
   connected,
   send,
   stop,
+  lidar,
 }: {
   data: Telemetry | null;
   connected: boolean;
   send: (command: Command) => void;
   stop: () => void;
+  lidar: LidarFrame | null;
 }) {
+  const [showLidar, setShowLidar] = useState(false);
   const [grid, setGrid] = useState<OccupancyGrid | null>(null);
   const [mapError, setMapError] = useState("");
   const [attempt, setAttempt] = useState(0);
@@ -65,10 +69,28 @@ export function NavigationPage({
   return (
     <>
       <MissionSummary data={data} />
+      <div className="navigation-sensor-toggle">
+        <label>
+          <input
+            type="checkbox"
+            checked={showLidar}
+            onChange={(e) => setShowLidar(e.target.checked)}
+          />
+          Show simulated LiDAR
+        </label>
+        <span>
+          {showLidar
+            ? lidar
+              ? "SIMULATED · acquisition pose · visualization only"
+              : "No fresh simulated scan; overlay hidden."
+            : "Optional visualization; planner and collision guard remain independent."}
+        </span>
+      </div>
       <div className="navigation-layout">
         <div className="navigation-main">
           {grid ? (
             <NavigationMap
+              lidar={showLidar ? lidar : null}
               grid={grid}
               data={data}
               selected={selected}

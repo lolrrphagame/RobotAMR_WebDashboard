@@ -1,3 +1,5 @@
+import { laserWorldPoints } from "../sensors";
+import type { LidarFrame } from "../sensors";
 import { useRef, useState } from "react";
 import {
   Crosshair,
@@ -16,12 +18,14 @@ export function NavigationMap({
   selected,
   onSelect,
   disabled,
+  lidar,
 }: {
   grid: OccupancyGrid;
   data: Telemetry | null;
   selected: Goal | null;
   onSelect: (goal: Goal) => void;
   disabled: boolean;
+  lidar: LidarFrame | null;
 }) {
   const svg = useRef<SVGSVGElement>(null);
   const drag = useRef<{
@@ -331,6 +335,21 @@ export function NavigationMap({
               strokeWidth=".025"
               markerEnd="url(#nav-arrow)"
             />
+          </g>
+        )}
+        {lidar && (
+          <g data-testid="navigation-lidar-overlay" pointerEvents="none">
+            {laserWorldPoints(lidar).map(([x, y], i) => (
+              <circle
+                key={i}
+                cx={x}
+                cy={-y}
+                r=".025"
+                fill="#4cebd2"
+                stroke="#135048"
+                strokeWidth=".006"
+              />
+            ))}
           </g>
         )}
         {pose && (

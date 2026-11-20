@@ -23,6 +23,7 @@ def snapshot(robot):
             "drive": {"max_rpm": config.max_rpm, "wheel_radius": config.wheel_radius,
                       "wheel_separation": config.wheel_separation, "encoder_cpr": config.encoder_cpr,
                       "encoder_polarity": config.encoder_polarity, "chassis_size": CHASSIS_SIZE},
+            "sensors": robot.sensors.snapshot(include_data=False),
             "configuration": robot.configuration.snapshot(),
             "diagnostics": diagnostics(robot),
             "motors": motor_measurements(robot),

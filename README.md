@@ -1,4 +1,4 @@
-# PBL4 AMR Mission Control — Phase 3
+# PBL4 AMR Mission Control — Phase 4A
 
 A simulation-only industrial robot dashboard built with React, TypeScript, Vite, Tailwind CSS, Recharts and FastAPI. No ROS, serial, GPIO, camera or motor interfaces are imported or opened. All controls, encoder readings and health values are simulated.
 
@@ -80,6 +80,7 @@ Browser tests start isolated frontend/backend servers on ports **15173 and 18000
 - **Overview:** authoritative map pose, heading, operating mode, mission status/progress, linear/angular velocity, both wheel RPMs, two target/actual RPM charts, encoder counts, system health and event stream.
 - **Manual Control:** the same telemetry and hold-to-drive controls. Hold a directional button using mouse/touch or focus it and hold Enter/Space. Releasing stops the simulated robot. Use STOP at any time. Space outside buttons and input controls also stops.
 - **Navigation:** interactive SVG occupancy map, virtual AMR with two powered wheels and a caster, heading, coordinate grid, planned path, trajectory, goal/heading selection, zoom/pan/reset, mission controls, A/B/C waypoint management and mission events.
+- **Sensors:** a deterministic virtual LiDAR radar view and a clearly labeled, disconnected camera placeholder. Navigation offers an optional simulated laser-point overlay.
 - **Diagnostics:** Motors, System Health, Communication and Events tabs with simulated measurements, bounded history, honest unavailable hardware fields, filtering and CSV exports.
 - **Settings:** saved Home controls and read-only robot geometry/simulation parameters. Home can also be configured directly from Navigation.
 
@@ -138,6 +139,56 @@ The backend retains **600 compact history samples** and **60 events** in bounded
 
 Browser integration tests use ports 15173/18000 and **memory-only configuration**, never the developer's saved Home/waypoints. Python API tests use isolated temporary configuration files; persistence tests explicitly reopen the store across simulator/lifespan restarts.
 
+## Phase 4A: Sensor Center
+
+Open **Sensors** for two panels: **2D LiDAR Visualization** and **Front Camera Monitor**. Every panel identifies its source, status, timestamp/frame ID, freshness or unavailability, and planned ROS interface. All current sources are **SIMULATED**, **PLACEHOLDER** or **DISABLED**. No physical sensor, camera device, ROS graph, UART or GPIO is opened.
+
+### Deterministic virtual LiDAR
+
+Defaults are **180° field of view**, **181 beams**, **5 m maximum range**, and **5 Hz target scan rate**. These are **simulation defaults, not specifications of your physical LiDAR**. Backend contracts use meters and radians; the UI converts headings/FOV to degrees for display.
+
+Rays originate at the authoritative robot's center with zero virtual mount offset, using its current map pose and yaw. Exact grid-cell traversal (DDA) stops at the first occupied/unknown cell or map boundary. Corner ties check adjacent occupied cells. There is no random noise, physical device query, interpolated pose engine or independent robot simulator.
+
+Each cached scan includes:
+
+- `angle_min`, `angle_max`, `angle_increment`, `range_min=0`, `range_max`, `beam_count`, `scan_time=0.2`, `time_increment=0`, units and map frame metadata.
+- Finite `payload.ranges` and parallel `payload.hits` arrays. **No return** is `range_max` with `hit=false`; a real virtual intersection exactly at maximum range has `hit=true`. No Infinity/NaN is transmitted.
+- `payload.acquisition_pose` with the map-frame x/y/yaw captured for that scan; `timestamp`, `sequence`, source and freshness.
+- Minimum detected obstacle distance over **hit rays only**, or null if nothing is detected. A ray starting inside an occupied cell or outside the map reports a zero-distance hit.
+
+The polar view points forward upward; positive angles are to the robot's left (CCW). Only hits are plotted: maximum-range no-return values do not create fake obstacles. **Show simulated LiDAR** on Navigation overlays world points transformed with the **scan's acquisition pose**, not a newer displayed robot pose. The overlay is optional and defaults off. No camera/laser visualization is used by A*, the footprint model or collision protection.
+
+### Camera placeholder and future contracts
+
+The camera remains **NOT_CONNECTED / PLACEHOLDER**. The visible color-bar pattern is static UI artwork, explicitly labeled **NO CAMERA FRAMES**, not a synthetic live feed. Frame timestamp, resolution, encoding, FPS and backend `stream_url` are null; zero camera frames have been received. The preview's layout dimensions do not represent camera resolution. There are no person, marker or object detections.
+
+Future adapters implement the common `SensorAdapter.snapshot()` envelope in `backend/app/sensors/contracts.py`:
+
+| Field | Meaning |
+| --- | --- |
+| `sensor_type` | `lidar_2d` or `camera` |
+| `source` | `SIMULATED`, `PLACEHOLDER` or `DISABLED` in Phase 4A |
+| `status` | `INITIALIZING`, `READY`, `STALE`, `ERROR`, `NOT_CONNECTED` or `DISABLED` |
+| `timestamp`, `frame_id`, `sequence` | Acquisition identity, not an invented camera timestamp |
+| `freshness` | Monotonic age in ms, stale flag and 1000 ms timeout |
+| `metadata` | Type-specific scan/image information |
+| `interface` | Planned topics/types with hardware connection state `DISABLED` |
+| `payload` | Latest finite virtual ranges/hits/pose, or null for the camera |
+
+Planned ROS 2 mappings are `/scan` → **sensor_msgs/LaserScan**, `/camera/image_raw` → **sensor_msgs/Image**, and `/camera/image_raw/compressed` → **sensor_msgs/CompressedImage**. No ROS package is imported. A future LaserScan adapter must validate/normalize range values and provide the scan-to-map acquisition transform before overlaying points. A future backend camera adapter must supply genuinely sourced frames, acquisition timestamps, dimensions/encoding/FPS and a same-origin `/api/` streaming URL. `CameraMonitor` has a conditional stream preview path, but the current placeholder always has a null URL and never requests frames. Hardware enablement is outside Phase 4A.
+
+### Rate limits, fault isolation and stale states
+
+The existing physics loop steps one `SensorManager`, which retains **only the latest scan** and one camera metadata snapshot. Repeated HTTP requests or extra clients do not rerun raycasting. Scheduling advances from simulation dt, captures once when the 0.2 s interval is due, and skips catch-up bursts after delays. There is no sensor history queue, image buffer or point-cloud history. Default single-scan JSON is tested below **8 KiB**, and status summaries below **4 KiB**; actual Pi 4 CPU/network performance still needs measurement on your device.
+
+`/ws/sensors` publishes cached bundles only when scan sequence/status changes, with a 0.2 s minimum publish interval. The frontend subscribes only while Sensors or Navigation is open; Diagnostics uses compact summaries from `/ws/telemetry`, so full beam arrays are not added to the 10 Hz robot stream. Only one latest bundle is retained in the browser.
+
+The sensor WebSocket is **read-only**: incoming messages close it with code 1008. It never owns motion, renews a control lease, disconnects a controller or alters a mission. Sensor stream disconnects/reconnects are independent of the control stream. Sensor adapter exceptions become visible error metadata and one warning/error event per failure episode; the physics, STOP, mission state and grid collision checks continue independently.
+
+A scan older than **1 second** is stale. The browser also checks acquisition timestamps against its clock, hiding laser points and minimum distance for stale/disconnected/error states. Camera fields remain unavailable rather than being marked fresh. Sensor transport failures reconnect every two seconds. Session IDs prevent overlaying a scan from another backend session. UI times continue to use UTC+07 and backend acquisition timestamps use UTC ISO 8601.
+
+Phase 4A limits: idealized 2D binary occupancy intersections; no glass/material effects, noise, occlusion beyond grid cells, intensity values, rolling scan motion, real calibration, extrinsics/TF subscription, image capture or detections. All beams are instantaneous at one pose (`time_increment=0`). The sensor sees raw occupied cells while navigation uses an inflated footprint; it is a visualization, not a safety sensor or obstacle-avoidance replacement.
+
 ## Navigation command examples
 
 Send these over the existing WebSocket, with `heartbeat` messages every 150 ms while owning an autonomous mission:
@@ -188,7 +239,11 @@ All motion command handling remains in memory; only Home and waypoint configurat
 | `POST /api/waypoints` | Validated save/delete waypoint commands |
 | `GET /api/events?level=warning&q=collision&format=csv` | Filtered bounded event export (`format=json` by default) |
 | `GET /api/diagnostics/history?limit=600&format=csv` | Retained compact telemetry export (`format=json` by default) |
-| `WS /ws/telemetry` | 10 Hz snapshots and simulated control input |
+| `WS /ws/telemetry` | 10 Hz snapshots, compact sensor status summaries and simulated control input |
+| `GET /api/sensors` | Latest sensor summaries and simulation session ID; no beam arrays |
+| `GET /api/sensors/lidar` | Latest cached virtual scan, metadata, hit mask and acquisition pose |
+| `GET /api/sensors/camera` | Disconnected camera placeholder metadata; no frames |
+| `WS /ws/sensors` | Read-only cached sensor bundles, at most 5 Hz |
 
 Control message (repeat while held):
 
@@ -202,7 +257,7 @@ Stop message:
 {"type":"stop"}
 ```
 
-Telemetry contains `type`, `simulation`, UTC `timestamp`, `mode`, `uptime`, measured simulated `linear_velocity`/`angular_velocity`, `motors`, `health`, `events`, `pose`, `home`, `trajectory`, `drive`, `clearance`, `configuration`, `diagnostics`, `session_id` and `navigation`. Navigation includes status, progress, active destination, current waypoint/index, planned path and saved waypoints. Each motor provides `target_rpm`, `actual_rpm`, normalized signed `encoder_count` and `raw_encoder_count`. UI event/history timestamps consistently use **Asia/Ho_Chi_Minh (UTC+07)**; exports retain UTC ISO 8601 timestamps. Sample timestamps refer to the last physics update, not each HTTP/WebSocket read. Error frames use `{"type":"error","message":"..."}`. Successful one-shot commands receive `{"type":"ack"}`; telemetry remains the authoritative result.
+Telemetry contains `type`, `simulation`, UTC `timestamp`, `mode`, `uptime`, measured simulated `linear_velocity`/`angular_velocity`, `motors`, `health`, `events`, `pose`, `home`, `trajectory`, `drive`, `clearance`, `configuration`, `diagnostics`, `session_id`, `sensors` and `navigation`. Navigation includes status, progress, active destination, current waypoint/index, planned path and saved waypoints. Each motor provides `target_rpm`, `actual_rpm`, normalized signed `encoder_count` and `raw_encoder_count`. UI event/history timestamps consistently use **Asia/Ho_Chi_Minh (UTC+07)**; exports retain UTC ISO 8601 timestamps. Sample timestamps refer to the last physics update, not each HTTP/WebSocket read. Error frames use `{"type":"error","message":"..."}`. Successful one-shot commands receive `{"type":"ack"}`; telemetry remains the authoritative result.
 
 Browser WebSocket origins are checked. Defaults allow localhost/127.0.0.1 on ports 5173 and 4173. For a different local origin, set a comma-separated `ALLOWED_ORIGINS` when starting the backend. No wildcard is used by default.
 
@@ -216,6 +271,10 @@ frontend/
   src/components/NavigationPage.tsx  Goal, waypoint and mission UI
   src/components/NavigationMap.tsx   SVG map rendering and interactions
   src/components/MissionSummary.tsx  Shared pose/mode/progress readout
+  src/components/SensorsPage.tsx    Sensor Center composition and status
+  src/components/sensors/          Polar scan and camera placeholder components
+  src/hooks/useSensors.ts          Independent read-only stream and freshness
+  src/sensors.ts                   Sensor contracts, validation, map transforms
   src/components/HomeConfiguration.tsx  Saved Home actions
   src/components/DiagnosticsPage.tsx  Diagnostics tabs and freshness
   src/components/diagnostics/       Motors, health, communication and events
@@ -237,6 +296,10 @@ backend/
   app/configuration.py           Validated Home/waypoints and atomic persistence
   app/diagnostics.py             Simulated measurements and future interface contracts
   app/exports.py                 Event filtering and CSV formatting
+  app/sensors/contracts.py       Transport-neutral sensor envelope / adapter protocol
+  app/sensors/lidar.py           Deterministic finite grid rays and virtual scans
+  app/sensors/camera.py          Metadata-only disconnected camera placeholder
+  app/sensors/manager.py         Single bounded cache and 5 Hz scheduling
   data/robot-config.json         Runtime configuration (ignored by Git)
   tests/                        API and simulator safety tests
   requirements.txt              Direct dependencies
@@ -247,15 +310,15 @@ Geometry: wheel radius **0.0435 m**, separation **0.300 m**, encoder resolution 
 
 The frontend never integrates robot pose or creates a second simulation. HTTP and WebSocket serialize the same backend state. The API and UI are independent of the plant implementation. A later phase can introduce an explicit robot adapter implementing the simulator's command, stop, disconnect, tick and snapshot contract, with an rclpy bridge behind it. That future phase must define its hardware command ownership, watchdog and authentication separately. No hardware integration is included here.
 
-## Phase 3 verification and limits
+## Phase 4A verification and limits
 
-Verified: **89 backend tests**, **8 browser integration tests**, and the frontend production build pass. The build reports a non-blocking large-chunk warning; the backend test dependency reports an AnyIO deprecation warning.
+Verified: **109 backend tests**, **13 browser integration tests**, and the frontend production build pass. The build reports a non-blocking large-chunk warning; the backend test dependency reports an AnyIO deprecation warning.
 
-Audit regressions cover manual versus autonomous collisions, warning deduplication, held-input inhibition, STOP/cancel after blocking, idle state cleanup, footprint boundary/corner clearance, continuous grazing-corner collision detection, the observed dashboard pose clearance, exact A/B/C sequence visits and return home, independent wheel encoder integration, and odometry invariance under raw encoder polarity changes. Phase 3 adds Home/current-pose/reset validation and persistence, no-teleport checks, configured Return Home, waypoint heading restore/overwrite/delete/sequence, corrupt-file fallback, failed-write rollback, diagnostics calculations, unavailable PI/UART data, bounded history, filtering/CSV escaping, STOP/disconnect status and stable session/sample timestamps. Automated backend tests also cover forward/inverse kinematics, combined-command RPM saturation, smooth wheel ramps, forward/reverse/arc/spin integration, encoder polarity, waypoint management, full sequence execution, obstacle detours, unreachable destinations, final yaw, return home, mission progress, command arbitration, pause/resume, STOP, collision guarding, disconnect and lease expiry. Browser tests exercise real UI/WebSocket integration and responsive layouts.
+Audit regressions cover manual versus autonomous collisions, warning deduplication, held-input inhibition, STOP/cancel after blocking, idle state cleanup, footprint boundary/corner clearance, continuous grazing-corner collision detection, the observed dashboard pose clearance, exact A/B/C sequence visits and return home, independent wheel encoder integration, and odometry invariance under raw encoder polarity changes. Phase 3 adds Home/current-pose/reset validation and persistence, no-teleport checks, configured Return Home, waypoint heading restore/overwrite/delete/sequence, corrupt-file fallback, failed-write rollback, diagnostics calculations, unavailable PI/UART data, bounded history, filtering/CSV escaping, STOP/disconnect status and stable session/sample timestamps. Automated backend tests also cover forward/inverse kinematics, combined-command RPM saturation, smooth wheel ramps, forward/reverse/arc/spin integration, encoder polarity, waypoint management, full sequence execution, obstacle detours, unreachable destinations, final yaw, return home, mission progress, command arbitration, pause/resume, STOP, collision guarding, disconnect and lease expiry. Phase 4A adds deterministic ray distances, translation/rotation, boundary/unknown/corner/max-range behavior, no-return classification, sensor scheduling/payload budgets, pose immutability, disconnected camera, read-only sensor transport and fault isolation. Browser tests exercise real UI/WebSocket integration, polar/overlay rendering, stale/disconnected/invalid sensor states, mission continuity during sensor outages and responsive layouts.
 
 This is an **educational navigation simulation, not production-grade Nav2**. The map is static; there are no dynamic obstacles, SLAM, localization uncertainty, wheel slip, torque, battery physics or live sensors. The conservative circular footprint can reject passages that a precisely oriented square could fit. A collision guard stops rather than replanning automatically. Test-only obstacle injection exercises runtime blocking; there is no dynamic-map editing UI. Each short curved integration step is guarded using its endpoint chord and a conservative footprint margin; this is not a continuous curved-body physics engine. Mission progress reflects consumed path points, rather than a time or distance estimate. Home and valid waypoints persist; live missions, encoders, diagnostics counters, histories and event logs reset with the backend. New sessions initialize pose at saved Home; the trail retains 1200 points. Use one worker. Telemetry currently includes the bounded path and trail at 10 Hz; larger maps would need separate map/path transport. Saved waypoint slots are shared across browser clients; selected draft goals and sequence edits are local to the Navigation view.
 
-Raw encoder polarity defaults to **left +1, right −1**, and remains configurable using `DriveConfig(encoder_polarity=(1, -1))` when constructing a simulator. Each wheel independently integrates its own average RPM over each physics substep. Normalized counts use positive-forward wheel motion on both sides, and differential-drive pose integration always uses normalized wheel RPM, so raw polarity cannot reverse odometry; `raw_encoder_count` applies the configured sign. This is configuration for later adapters, not a hardware connection. No dependencies, ROS repositories or ESP32 repositories were changed for Phase 3.
+Raw encoder polarity defaults to **left +1, right −1**, and remains configurable using `DriveConfig(encoder_polarity=(1, -1))` when constructing a simulator. Each wheel independently integrates its own average RPM over each physics substep. Normalized counts use positive-forward wheel motion on both sides, and differential-drive pose integration always uses normalized wheel RPM, so raw polarity cannot reverse odometry; `raw_encoder_count` applies the configured sign. This is configuration for later adapters, not a hardware connection. No dependencies, ROS repositories or ESP32 repositories were changed for Phase 4A.
 
 For alternate local API ports, set `VITE_PROXY_TARGET=http://127.0.0.1:<port>` when launching Vite, and include the UI origin in backend `ALLOWED_ORIGINS`. The defaults and normal run commands above are unchanged.
 

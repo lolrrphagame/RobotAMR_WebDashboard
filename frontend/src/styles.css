@@ -2122,3 +2122,391 @@ h1 {
     font-size: 17px;
   }
 }
+/* Phase 4A: virtual perception panels, no hardware sources. */
+.sensor-center {
+  padding-bottom: 25px;
+}
+.sensor-center-intro {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: center;
+  margin: 0 0 20px;
+}
+.sensor-center-intro p {
+  font-size: 13px;
+  color: #89a5be;
+  line-height: 1.8;
+  margin-top: 8px;
+  max-width: 750px;
+}
+.sensor-center-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.12fr) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+.sensor-center-grid > .panel {
+  min-width: 0;
+}
+.sensor-source {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  padding: 5px 9px;
+  border-radius: 5px;
+  border: 1px solid #286878;
+  color: #62d9e9;
+  background: #123346;
+}
+.sensor-source.placeholder {
+  background: #32291a;
+  border-color: #67512b;
+  color: #ddbc7f;
+}
+.sensor-status-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border-block: 1px solid #253b51;
+  padding: 16px 21px;
+  margin-top: 21px;
+  background: #0d1c2d;
+}
+.sensor-status-row > span {
+  font-size: 11px;
+  color: #7f9eb8;
+}
+.sensor-status-row strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: #b9e5ef;
+  margin-top: 7px;
+}
+.sensor-status-row .sensor-ready {
+  color: #55d7b7;
+}
+.sensor-status-row .sensor-warning {
+  color: #e2b76c;
+}
+.lidar-polar {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1.45;
+  padding: 17px 12px;
+  background: radial-gradient(ellipse at bottom, #123148, #0a1524);
+}
+.lidar-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  padding: 18px 20px;
+  border-block: 1px solid #23394e;
+}
+.lidar-metrics span {
+  font-size: 11px;
+  color: #7f9fbb;
+}
+.lidar-metrics strong {
+  display: block;
+  font-size: 16px;
+  font-weight: 500;
+  color: #c2e1ed;
+  margin-top: 7px;
+}
+.sensor-details {
+  margin: 0;
+  padding: 5px 21px 8px;
+}
+.sensor-details > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 15px;
+  border-bottom: 1px solid #22364c;
+  padding: 13px 0;
+  font-size: 12px;
+}
+.sensor-details dt {
+  color: #7898b7;
+}
+.sensor-details dd {
+  color: #b4cde3;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.sensor-details > div:last-child {
+  border: 0;
+}
+.sensor-interface {
+  border-top: 1px solid #23384b;
+  padding: 18px 21px;
+  background: #0e1c2c;
+}
+.sensor-interface .eyebrow {
+  font-size: 10px;
+}
+.sensor-interface p {
+  font-size: 12px;
+  line-height: 1.9;
+  color: #83a2ba;
+  margin: 8px 0;
+}
+.sensor-interface .tag {
+  display: inline-block;
+  margin-top: 7px;
+}
+.camera-preview {
+  position: relative;
+  isolation: isolate;
+  aspect-ratio: 16/10;
+  background: #0b1320;
+  overflow: hidden;
+  margin-top: 21px;
+  border-block: 1px solid #273b52;
+}
+.camera-test-pattern {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, transparent 0 72%, #07101c 72%),
+    linear-gradient(
+      90deg,
+      #a2b5c4 0 14.28%,
+      #ae9a61 14.28% 28.56%,
+      #3eabb3 28.56% 42.84%,
+      #4c9b75 42.84% 57.12%,
+      #8b6199 57.12% 71.4%,
+      #8b5660 71.4% 85.68%,
+      #3d6898 85.68%
+    );
+  opacity: 0.24;
+  filter: saturate(0.55);
+}
+.camera-preview::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0 3px,
+    #00000033 3px 4px
+  );
+  z-index: 1;
+}
+.camera-placeholder {
+  position: relative;
+  display: flex;
+  height: 100%;
+  min-height: 200px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 13px;
+  padding: 24px;
+  text-align: center;
+  z-index: 2;
+  background: linear-gradient(0deg, #0814229c, #08142233);
+}
+.camera-placeholder svg {
+  color: #b4c0d0;
+}
+.camera-placeholder strong {
+  font-size: 20px;
+  letter-spacing: 0.08em;
+  color: #d0d9e2;
+  font-weight: 600;
+}
+.camera-placeholder > span {
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  border: 1px solid #58606b;
+  background: #111b26bc;
+  padding: 7px 9px;
+  color: #c4c4b5;
+  border-radius: 4px;
+}
+.camera-placeholder p {
+  font-size: 12px;
+  line-height: 1.7;
+  max-width: 240px;
+  color: #9aa9bb;
+}
+.camera-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.sensor-center-note {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  border-top: 1px solid #22384c;
+  margin-top: 25px;
+  padding: 18px 4px;
+  color: #7b9cb8;
+  font-size: 12px;
+  line-height: 1.9;
+}
+.sensor-center-note svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.navigation-sensor-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  margin: -3px 0 20px;
+  padding: 12px 15px;
+  background: #0e1e2e;
+  border: 1px solid #234052;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #83a4bb;
+}
+.navigation-sensor-toggle label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #b6d9e7;
+  white-space: nowrap;
+  cursor: pointer;
+  font-size: 13px;
+}
+.navigation-sensor-toggle input {
+  accent-color: #3ed4c4;
+  width: 15px;
+  height: 15px;
+}
+.navigation-sensor-toggle > span {
+  text-align: right;
+  font-size: 11px;
+}
+@media (max-width: 1200px) {
+  .sensor-center-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+  }
+  .sensor-center-grid .panel-heading {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .sensor-center-grid h2 {
+    font-size: 16px;
+  }
+  .sensor-status-row {
+    padding-inline: 15px;
+    flex-wrap: wrap;
+  }
+  .sensor-details {
+    padding-inline: 16px;
+  }
+  .sensor-details > div {
+    font-size: 11px;
+  }
+  .sensor-status-row strong {
+    font-size: 13px;
+  }
+  .lidar-metrics {
+    grid-template-columns: 1fr 1fr;
+    row-gap: 18px;
+  }
+  .navigation-sensor-toggle {
+    flex-wrap: wrap;
+  }
+  .navigation-sensor-toggle > span {
+    text-align: left;
+  }
+}
+@media (max-width: 950px) {
+  .sensor-center-grid {
+    grid-template-columns: 1fr;
+  }
+  .sensor-center-intro {
+    align-items: flex-start;
+  }
+  .sensor-center-intro .tag {
+    display: none;
+  }
+  .lidar-polar {
+    max-height: 460px;
+  }
+  .camera-preview {
+    aspect-ratio: 16/9;
+  }
+  .sensor-center-grid .panel-heading {
+    flex-wrap: nowrap;
+  }
+  .sensor-details > div,
+  .sensor-details dd {
+    font-size: 13px;
+  }
+  .sensor-status-row {
+    flex-wrap: nowrap;
+    padding: 16px 20px;
+  }
+  .sensor-status-row > span {
+    font-size: 12px;
+  }
+  .sensor-status-row strong {
+    font-size: 15px;
+  }
+  .lidar-metrics {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+@media (max-width: 560px) {
+  .sensor-center-grid .panel-heading {
+    flex-wrap: wrap;
+  }
+  .sensor-status-row {
+    padding: 14px 16px;
+    gap: 10px;
+  }
+  .sensor-status-row > span {
+    font-size: 11px;
+  }
+  .sensor-status-row strong {
+    font-size: 13px;
+  }
+  .sensor-details > div,
+  .sensor-details dd {
+    font-size: 12px;
+  }
+  .lidar-metrics {
+    grid-template-columns: 1fr 1fr;
+  }
+  .camera-preview {
+    aspect-ratio: 1.5;
+  }
+  .camera-placeholder strong {
+    font-size: 18px;
+  }
+  .camera-placeholder {
+    padding: 20px;
+    gap: 12px;
+  }
+  .camera-placeholder > span {
+    font-size: 9px;
+  }
+  .camera-placeholder p {
+    font-size: 11px;
+  }
+  .sensor-interface p {
+    font-size: 12px;
+  }
+  .sensor-center-intro p {
+    font-size: 12px;
+  }
+  .navigation-sensor-toggle > span {
+    font-size: 11px;
+  }
+  .sidebar .nav-item {
+    width: 34px;
+  }
+}

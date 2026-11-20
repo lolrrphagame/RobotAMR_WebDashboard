@@ -12,6 +12,7 @@ from .state import HOME, RobotState
 from .telemetry import snapshot
 from .configuration import ConfigurationManager, ConfigurationError, ConfigurationConflict
 from .diagnostics import history_sample
+from .sensors.manager import SensorManager
 
 COMMAND_TIMEOUT = 0.6
 AUTONOMOUS_TIMEOUT = 1.5
@@ -45,6 +46,7 @@ class RobotSimulator:
         self.counters = {"control_commands": 0, "navigation_commands": 0, "configuration_commands": 0,
                          "stop_commands": 0, "rejected_commands": 0, "watchdog_expirations": 0,
                          "collisions": 0, "ws_rx_frames": 0}
+        self.sensors = SensorManager(self.grid, self.state.pose, self.sample_timestamp)
         self.log("info", "Navigation simulator initialized. All hardware interfaces disabled.")
         for warning in self.configuration.warnings:
             self.log("warning", warning)
@@ -285,6 +287,9 @@ class RobotSimulator:
 
         self.sample_timestamp = datetime.now(timezone.utc).isoformat()
         self.sample_uptime = time.monotonic() - self.started
+        sensor_error = self.sensors.step(dt, self.state.pose, self.sample_timestamp, time.monotonic())
+        if sensor_error:
+            self.log("error", sensor_error)
         self.history.append(history_sample(self.snapshot()))
 
     def snapshot(self):

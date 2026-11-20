@@ -1,3 +1,4 @@
+import type { SensorBundle } from "./sensors";
 export interface Telemetry {
   type: "telemetry";
   simulation: true;
@@ -9,6 +10,7 @@ export interface Telemetry {
   home: Pose;
   configuration: RobotConfiguration;
   diagnostics: Diagnostics;
+  sensors: Pick<SensorBundle, "lidar" | "camera">;
   clearance: { pose_clear: boolean; radius: number };
   trajectory: [number, number][];
   navigation: NavigationState;

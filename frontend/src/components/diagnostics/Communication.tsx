@@ -10,6 +10,52 @@ export function Communication({ data }: { data: Telemetry | null }) {
       </div>
       <section className="panel">
         <div className="panel-heading">
+          <h2>Virtual sensors / simulation infrastructure</h2>
+          <span className="tag">SIMULATION ONLY</span>
+        </div>
+        <div className="detail-grid">
+          <div>
+            Virtual LiDAR source
+            <strong>{data?.sensors.lidar.source ?? "Unavailable"}</strong>
+          </div>
+          <div>
+            Virtual LiDAR state
+            <strong>{data?.sensors.lidar.status ?? "Unavailable"}</strong>
+          </div>
+          <div>
+            Scan rate target
+            <strong>
+              {data?.sensors.lidar.metadata.nominal_hz ?? 5} Hz (virtual)
+            </strong>
+          </div>
+          <div>
+            Scan age
+            <strong>
+              {data?.sensors.lidar.freshness.age_ms != null
+                ? `${(data.sensors.lidar.freshness.age_ms / 1000).toFixed(2)} s`
+                : "Unavailable"}
+            </strong>
+          </div>
+          <div>
+            Camera source / state
+            <strong>
+              {data
+                ? `${data.sensors.camera.source} / ${data.sensors.camera.status}`
+                : "Unavailable"}
+            </strong>
+          </div>
+          <div>
+            Hardware ROS 2 / UART<strong>DISABLED / DISABLED</strong>
+          </div>
+        </div>
+        <p className="diagnostic-footnote">
+          Virtual defaults are not physical sensor specifications. Sensor Center
+          provides the read-only scan and camera placeholder. Planned sensor
+          topics: /scan, /camera/image_raw and /camera/image_raw/compressed.
+        </p>
+      </section>
+      <section className="panel">
+        <div className="panel-heading">
           <h2>ROS 2 Humble / planned interfaces</h2>
           <span className="tag">DISABLED</span>
         </div>
