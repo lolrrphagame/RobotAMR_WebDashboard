@@ -1,6 +1,112 @@
-# PBL4 AMR Mission Control — Phase 5A
+# PBL4 AMR Mission Control — Phase 5B.1
 
 A simulation-only industrial robot dashboard built with React, TypeScript, Vite, Tailwind CSS, Recharts and FastAPI. No ROS, serial, GPIO, camera or motor interfaces are imported or opened. All controls, encoder readings and health values are simulated.
+
+## Phase 5B.1: local production deployment
+
+This entrypoint serves the **built React frontend and the existing FastAPI API/WebSockets on one loopback origin**, without Vite, reload processes, development endpoints or a second simulator. Phase 5A Host/Origin checks, authentication policy, CSRF/session handling, ownership and STOP remain in force. The local operator bypass is still restricted to loopback peers and hosts. **LAN is disabled by this launcher until Phase 5B.2.**
+
+### Install project-local dependencies
+
+Run from the existing checkout. Python 3.10+ with venv support and Node.js 24/npm are prerequisites; these commands do not install OS packages:
+
+```bash
+cd ~/Projects/PBL4_Dashboard
+python3 -m venv backend/.venv
+env -u PYTHONPATH backend/.venv/bin/python -m pip install -r backend/requirements.lock.txt
+source ~/.nvm/nvm.sh
+nvm use 24
+npm --prefix frontend ci
+```
+
+Existing project dependencies can be reused. No new dependency was introduced for serving production assets.
+
+### One-command start and browser access
+
+First stop any development backend using the same saved database. Then:
+
+```bash
+cd ~/Projects/PBL4_Dashboard
+./start-dashboard.sh
+```
+
+The script builds `frontend/dist`, checks the Python environment, and replaces itself with the single production server process. It loads your existing nvm installation if Node/npm are absent from PATH; it never downloads dependencies automatically. Open **http://127.0.0.1:8000** in the local browser. The terminal prints the URL and server PID. The default port can be changed without allowing external binding:
+
+```bash
+DASHBOARD_PORT=8080 ./start-dashboard.sh
+```
+
+For a previously built, unchanged frontend:
+
+```bash
+./start-dashboard.sh --no-build
+```
+
+`--no-build` does not require Node/npm at runtime. It fails clearly if the built index/assets are missing. Stop the current server before rebuilding or updating source; this is not a zero-downtime release mechanism.
+
+The server always binds **127.0.0.1**, uses one worker, trusts no forwarded proxy headers, and does not enable reload. It rejects inherited `APP_MODE=lan`, rather than silently downgrading security. Hosts/origins are restricted to localhost/127.0.0.1 and the selected port. Existing LAN environment values cannot expand these permissions. There is no `--host` or `--workers` option on this launcher.
+
+The frontend, `/api/*`, `/ws/telemetry` and `/ws/sensors` all use the same origin. URLs `/overview`, `/manual-control`, `/navigation`, `/missions`, `/sensors`, `/diagnostics`, and `/settings` support direct visits, refresh, and browser history. Refreshing an active mission pauses it through the existing disconnect policy; it never duplicates or resumes execution. Unknown API/static paths return 404, not the SPA. `/docs`, `/redoc`, `/openapi.json`, Vite/source URLs, dotfiles and source maps are not exposed. Only approved built asset extensions under `dist/assets` are served.
+
+### Shutdown and health checks
+
+Keep the terminal attached. Press **Ctrl+C**, or send SIGTERM to the specific printed Uvicorn PID from another terminal:
+
+```bash
+kill -TERM <server-pid>
+```
+
+Wait for **Application shutdown complete** before restarting. The script uses `exec`, so no shell-owned child, hidden daemon or PID file needs cleanup. The existing lifespan halts simulated motion, joins the physics task, records interruption when possible, and closes/checkpoints SQLite. Do not use SIGKILL for routine shutdown; a forced crash can lose the most recent uncheckpointed live progress.
+
+Health check (no authentication needed on trusted local loopback):
+
+```bash
+curl --fail --show-error http://127.0.0.1:8000/api/health
+curl --fail --show-error http://127.0.0.1:8000/api/auth/session
+```
+
+Expected health is `status=ok`, `simulation=true`, `hardware_enabled=false`; session mode is local and role operator. Use the configured port if changed.
+
+### Saved data and configuration
+
+Default paths remain **`backend/data/robot-config.json`** and **`backend/data/missions.sqlite3`**. No reset, seed, database replacement or schema rewrite is performed by this entrypoint. Existing `ROBOT_CONFIG_PATH` and `MISSION_DB_PATH` overrides are honored; prefer absolute paths. The selected SQLite path has an advisory `.production.lock` file to prevent two production launchers sharing it, even on different ports. Its empty file may remain after exit: the OS releases the lock automatically. Do not delete a lock file while a server is running. Development servers do not acquire this launcher lock, so never run a development and production simulator against the same data concurrently.
+
+On restart, saved Home/waypoints/templates/pending jobs/history remain; robot pose initializes at saved valid Home, encoders/live state reset, and unfinished runs remain interrupted. No mission starts automatically. Existing backup and restore instructions below are unchanged.
+
+### Troubleshooting
+
+| Error | Action |
+| --- | --- |
+| Missing `backend/.venv` or Python modules | Run the local installation commands above; do not install globally |
+| Node/npm or Vite missing | Load nvm/Node 24, run `npm --prefix frontend ci`, or use `--no-build` with an existing build |
+| Frontend build/index missing | Run the default launcher to rebuild; do not point the server at arbitrary folders |
+| Address already in use | Stop the intended old server or choose `DASHBOARD_PORT`; never kill unrelated processes |
+| Production database lock unavailable | Another production instance may use that database; stop it gracefully. Also check local file permissions |
+| LAN mode rejected | This release intentionally supports local production only; do not bypass it with `0.0.0.0`, forwarding or rewritten hosts |
+| Startup/database failure | Read the terminal error, preserve saved files, verify storage/permissions and restore from a verified backup if necessary |
+| Refresh/asset error after source update | Stop, rebuild and restart; reload the browser to obtain matching hashed assets |
+
+### Verification and development differences
+
+Before modifications, **127 backend tests**, **15 development browser tests**, and the frontend build passed with no failures. Final Phase 5B.1 verification uses isolated temporary files/databases, never developer records:
+
+```bash
+cd ~/Projects/PBL4_Dashboard
+env -u PYTHONPATH backend/.venv/bin/python -m pytest backend/tests -q
+source ~/.nvm/nvm.sh
+nvm use 24
+npm --prefix frontend run build
+npm --prefix frontend run test:e2e
+npm --prefix frontend run test:production
+```
+
+Final results: **132 backend tests passed**, **15 development Playwright tests passed**, **3 production Playwright tests passed**, and the production build passed. One upstream AnyIO deprecation warning remains. Production tests use port 18173 with fresh temporary JSON/SQLite paths; development browser tests use 15173/18000 with memory-only data. Keep these test ports available. Tests cover static asset isolation, Host/Origin rejection, real process startup/SIGTERM/restart, persistence, same-origin control/sensor sockets, STOP/disconnect, refresh, and prevention of duplicate mission execution.
+
+Development remains the original two-server Vite/backend workflow below, including developer API docs. Production is **one process/one origin**, built assets only, no Vite proxy/server and no API docs. Production serving does not change the simulation engine, virtual sensor defaults, mission execution logic or hardware boundaries.
+
+### Phase 5B.2 prerequisites and limits
+
+This is local production-style hosting, not LAN deployment, a system service, or high availability. No TLS, remote operator provisioning, restart supervisor, firewall rule or system package is installed. Phase 5B.2 must provide trusted HTTPS/static hosting or a reviewed proxy topology, strict Host/Origin/proxy configuration, private credentials, Windows/LAN browser tests, backup/restore drills, service supervision and Pi 4 performance measurements. Phase 5A LAN authentication code is preserved for that work, but **`start-dashboard.sh` and its production factory refuse LAN mode today**. Hardware remains disabled throughout.
 
 ## Phase 5A security and reliability
 
@@ -12,7 +118,7 @@ The existing two-terminal run commands below remain valid. `APP_MODE=local` perm
 
 ### Explicit LAN operator sessions
 
-LAN mode is opt-in and requires **HTTPS/WSS**, explicit origins and hosts, and an operator password hash. Anonymous observers may read monitoring data on this explicitly enabled private LAN service; **all HTTP mutations and control WebSocket messages require the shared operator login**. This design protects control/configuration, not monitoring-data confidentiality. If anonymous observation is unacceptable, restrict the entire site at the TLS proxy as a Phase 5B deployment policy.
+The following Phase 5A LAN protocol is retained for future Phase 5B.2 testing, not enabled by the Phase 5B.1 production launcher. LAN mode is opt-in and requires **HTTPS/WSS**, explicit origins and hosts, and an operator password hash. Anonymous observers may read monitoring data on this explicitly enabled private LAN service; **all HTTP mutations and control WebSocket messages require the shared operator login**. This design protects control/configuration, not monitoring-data confidentiality. If anonymous observation is unacceptable, restrict the entire site at the TLS proxy as a Phase 5B deployment policy.
 
 Generate a password hash interactively, outside the repository (no password appears in shell arguments):
 

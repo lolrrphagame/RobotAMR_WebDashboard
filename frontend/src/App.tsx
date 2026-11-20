@@ -1,4 +1,4 @@
-import { Suspense, lazy, useState } from "react";
+import { Suspense, lazy, useState, useEffect } from "react";
 import {
   Activity,
   Battery,
@@ -57,8 +57,17 @@ const pages = [
   { name: "Diagnostics", icon: Activity },
   { name: "Settings", icon: Settings },
 ];
+const pagePath = (name: string) =>
+  "/" + name.toLowerCase().replaceAll(" ", "-");
+const pageFromPath = () =>
+  pages.find((p) => pagePath(p.name) === location.pathname)?.name ?? "Overview";
 function App() {
-  const [page, setPage] = useState("Overview");
+  const [page, setPage] = useState(pageFromPath);
+  useEffect(() => {
+    const navigate = () => setPage(pageFromPath());
+    window.addEventListener("popstate", navigate);
+    return () => window.removeEventListener("popstate", navigate);
+  }, []);
   const {
     operator,
     data,
@@ -97,6 +106,8 @@ function App() {
               className={page === name ? "nav-item selected" : "nav-item"}
               onClick={() => {
                 release();
+                if (location.pathname !== pagePath(name))
+                  window.history.pushState(null, "", pagePath(name));
                 setPage(name);
               }}
             >
