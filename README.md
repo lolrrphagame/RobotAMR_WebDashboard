@@ -1,4 +1,4 @@
-# PBL4 AMR Mission Control — Phase 4A
+# PBL4 AMR Mission Control — Phase 4B
 
 A simulation-only industrial robot dashboard built with React, TypeScript, Vite, Tailwind CSS, Recharts and FastAPI. No ROS, serial, GPIO, camera or motor interfaces are imported or opened. All controls, encoder readings and health values are simulated.
 
@@ -80,6 +80,7 @@ Browser tests start isolated frontend/backend servers on ports **15173 and 18000
 - **Overview:** authoritative map pose, heading, operating mode, mission status/progress, linear/angular velocity, both wheel RPMs, two target/actual RPM charts, encoder counts, system health and event stream.
 - **Manual Control:** the same telemetry and hold-to-drive controls. Hold a directional button using mouse/touch or focus it and hold Enter/Space. Releasing stops the simulated robot. Use STOP at any time. Space outside buttons and input controls also stops.
 - **Navigation:** interactive SVG occupancy map, virtual AMR with two powered wheels and a caster, heading, coordinate grid, planned path, trajectory, goal/heading selection, zoom/pan/reset, mission controls, A/B/C waypoint management and mission events.
+- **Missions:** named mission builder, templates, bounded queue, explicit execution, persistent history and stored-record analytics.
 - **Sensors:** a deterministic virtual LiDAR radar view and a clearly labeled, disconnected camera placeholder. Navigation offers an optional simulated laser-point overlay.
 - **Diagnostics:** Motors, System Health, Communication and Events tabs with simulated measurements, bounded history, honest unavailable hardware fields, filtering and CSV exports.
 - **Settings:** saved Home controls and read-only robot geometry/simulation parameters. Home can also be configured directly from Navigation.
@@ -188,6 +189,63 @@ The sensor WebSocket is **read-only**: incoming messages close it with code 1008
 A scan older than **1 second** is stale. The browser also checks acquisition timestamps against its clock, hiding laser points and minimum distance for stale/disconnected/error states. Camera fields remain unavailable rather than being marked fresh. Sensor transport failures reconnect every two seconds. Session IDs prevent overlaying a scan from another backend session. UI times continue to use UTC+07 and backend acquisition timestamps use UTC ISO 8601.
 
 Phase 4A limits: idealized 2D binary occupancy intersections; no glass/material effects, noise, occlusion beyond grid cells, intensity values, rolling scan motion, real calibration, extrinsics/TF subscription, image capture or detections. All beams are instantaneous at one pose (`time_increment=0`). The sensor sees raw occupied cells while navigation uses an inflated footprint; it is a visualization, not a safety sensor or obstacle-avoidance replacement.
+
+## Phase 4B: Mission Operations
+
+Open **Missions** for high-level workflows. Navigation remains the map-based driving page. The operations coordinator reuses the existing `MissionManager.prepare/follow` and the same robot pose, wheel dynamics, collision guard, ownership and watchdogs. There is no second movement controller.
+
+Build a named mission with up to **32 ordered steps**: saved waypoint A/B/C, arbitrary valid map pose and heading, configured Home, or WAIT (positive duration up to 3600 seconds). Add/remove/reorder draft steps. **Save mission template** saves a definition only; **Add mission to queue** creates a pending definition only. Templates can be queued repeatedly as independent missions or deleted.
+
+The pending queue is limited to **20 missions**, and templates to **50**. Pending jobs can be moved up or removed; clearing the queue requires a separate confirmation and does not cancel the active job. **Start next mission** explicitly authorizes exactly one job. A completed, cancelled, failed or interrupted mission **never starts the next item automatically**. Even when pending jobs exist, another Start next command is required.
+
+Execution commands use the current browser's control WebSocket. Only one operator can own an active mission, including WAIT and paused steps. Manual motion and a second Navigation mission are rejected until the operations mission ends or is cancelled. Pause/resume from either page acts on the same active operation. STOP/cancel immediately zeros simulated wheels and prevents any following step or pending job from moving. Browser disconnect or heartbeat expiry pauses and releases ownership; another live operator must explicitly resume. Page changes alone do not cancel an autonomous mission.
+
+Home/waypoint references are validated and resolved to pose snapshots at execution start; later saved-slot edits cannot redirect a running job. Missing references reject Start next without removing the pending definition. The existing A* planner validates each navigation step immediately before movement; an unreachable path or collision terminates the active execution as **failed** with its reason. WAIT uses accumulated positive physics dt, excluding pauses; no wall-clock sleep or new motion controller is introduced.
+
+### SQLite persistence and restart behavior
+
+Mission definitions and records are stored in **`backend/data/missions.sqlite3`** (SQLite WAL; ignored by Git), configurable with **`MISSION_DB_PATH`**. SQLite is included with Python; no additional package or system installation is required. Home/waypoints continue using their compatible, separate JSON store.
+
+The `definitions` table stores pending queue order and templates. The `executions` table stores each unique execution ID and original mission ID, name, creation/start/finish timestamps, ordered resolved step definitions and results, completed steps, progress, start/end poses, active simulation duration, estimated center-path distance, completed waypoint visits and reasons. Queue removal and execution creation are committed together. Transitions and step results are persisted immediately; active runs checkpoint roughly once per simulated second.
+
+On startup, unfinished running/paused records become **interrupted**. Valid pending definitions and templates are restored, but live execution state, owner and motion are not. Invalid restored definitions are omitted with warning events. Normal shutdown records interruption; an abrupt crash may lose up to the last checkpoint of duration/distance/pose. No mission auto-resumes or auto-starts after restart. Use **one backend worker/process** per database and configuration file. Back up the SQLite database using SQLite-aware tooling, including WAL state; schema migration and retention tooling are not implemented yet.
+
+### History and analytics
+
+Mission history supports result/name filtering, ordered step details and CSV export. CSV step/start/end-pose columns contain JSON. UI history queries return up to 1000 matching records; persistent storage is not silently truncated. The dashboard summary returns the latest 200 records. Analytics cover named Mission Operations runs, not standalone map navigation or manual driving. They currently query all terminal stored records: total, completed/cancelled/failed/interrupted, success rate (completed / all terminal runs), mean active duration across those runs, estimated path distance and completed waypoint visits. Trends group execution starts by **UTC day**. Empty history shows an informative empty state rather than invented measurements.
+
+Estimated distance integrates simulated center translation at physics substeps; wheel spins do not add center-path distance. Duration is simulated active execution time including WAIT, excluding pause/offline time. This is operational simulation data, not evidence of physical AMR throughput or accuracy. Large histories will need indexed/SQL aggregation and pagination before production use.
+
+### Mission APIs
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/missions` | Active run, pending queue, templates, recent history, analytics |
+| `POST /api/missions?template=false` | Validate and queue a definition; `template=true` saves without launch |
+| `POST /api/missions/queue/order` | JSON array containing every pending ID exactly once |
+| `DELETE /api/missions/{id}?template=false` | Remove pending definition or saved template |
+| `DELETE /api/missions/queue?confirm=true` | Explicitly confirmed queue clear |
+| `GET /api/missions/history?status=all&q=&format=csv` | Filtered records / CSV; omit format for JSON |
+| `WS /ws/telemetry` | Existing stream plus validated `operations` execution commands |
+
+Example definition:
+
+```json
+{"name":"Station delivery","steps":[{"kind":"waypoint","waypoint":"A"},{"kind":"wait","seconds":2},{"kind":"pose","pose":{"x":2,"y":2,"yaw":0}},{"kind":"home"}]}
+```
+
+Execution messages (acknowledged by the existing control stream):
+
+```json
+{"type":"operations","action":"start_next"}
+{"type":"operations","action":"pause"}
+{"type":"operations","action":"resume"}
+{"type":"operations","action":"cancel"}
+```
+
+Definitions can be managed by multiple clients; mutation/physics actions execute serially on the single backend event loop, and queue-order updates must match the current queue. Ownership is assigned only by an explicit WebSocket execution command. These remain local-development APIs without user authentication. Python API tests use temporary databases; browser tests use `MISSION_DB_PATH=:memory:` and never edit the developer's mission database.
+
+Implementation: `backend/app/operations.py` contains validated step/definition models, `DefinitionStore` SQLite persistence and the `Operations` queue/execution/history/analytics coordinator. Existing simulator/main/telemetry modules integrate it. `frontend/src/components/MissionsPage.tsx` exports reusable MissionOverview, MissionBuilder, MissionQueue, ActiveMission, MissionHistory and MissionAnalytics components. Operational events are emitted on transitions, not each tick.
 
 ## Navigation command examples
 
@@ -310,11 +368,11 @@ Geometry: wheel radius **0.0435 m**, separation **0.300 m**, encoder resolution 
 
 The frontend never integrates robot pose or creates a second simulation. HTTP and WebSocket serialize the same backend state. The API and UI are independent of the plant implementation. A later phase can introduce an explicit robot adapter implementing the simulator's command, stop, disconnect, tick and snapshot contract, with an rclpy bridge behind it. That future phase must define its hardware command ownership, watchdog and authentication separately. No hardware integration is included here.
 
-## Phase 4A verification and limits
+## Phase 4B verification and limits
 
-Verified: **109 backend tests**, **13 browser integration tests**, and the frontend production build pass. The build reports a non-blocking large-chunk warning; the backend test dependency reports an AnyIO deprecation warning.
+Verified: **117 backend tests**, **14 browser integration tests**, and the frontend production build pass. The build reports a non-blocking large-chunk warning; the backend test dependency reports an AnyIO deprecation warning.
 
-Audit regressions cover manual versus autonomous collisions, warning deduplication, held-input inhibition, STOP/cancel after blocking, idle state cleanup, footprint boundary/corner clearance, continuous grazing-corner collision detection, the observed dashboard pose clearance, exact A/B/C sequence visits and return home, independent wheel encoder integration, and odometry invariance under raw encoder polarity changes. Phase 3 adds Home/current-pose/reset validation and persistence, no-teleport checks, configured Return Home, waypoint heading restore/overwrite/delete/sequence, corrupt-file fallback, failed-write rollback, diagnostics calculations, unavailable PI/UART data, bounded history, filtering/CSV escaping, STOP/disconnect status and stable session/sample timestamps. Automated backend tests also cover forward/inverse kinematics, combined-command RPM saturation, smooth wheel ramps, forward/reverse/arc/spin integration, encoder polarity, waypoint management, full sequence execution, obstacle detours, unreachable destinations, final yaw, return home, mission progress, command arbitration, pause/resume, STOP, collision guarding, disconnect and lease expiry. Phase 4A adds deterministic ray distances, translation/rotation, boundary/unknown/corner/max-range behavior, no-return classification, sensor scheduling/payload budgets, pose immutability, disconnected camera, read-only sensor transport and fault isolation. Browser tests exercise real UI/WebSocket integration, polar/overlay rendering, stale/disconnected/invalid sensor states, mission continuity during sensor outages and responsive layouts.
+Audit regressions cover manual versus autonomous collisions, warning deduplication, held-input inhibition, STOP/cancel after blocking, idle state cleanup, footprint boundary/corner clearance, continuous grazing-corner collision detection, the observed dashboard pose clearance, exact A/B/C sequence visits and return home, independent wheel encoder integration, and odometry invariance under raw encoder polarity changes. Phase 3 adds Home/current-pose/reset validation and persistence, no-teleport checks, configured Return Home, waypoint heading restore/overwrite/delete/sequence, corrupt-file fallback, failed-write rollback, diagnostics calculations, unavailable PI/UART data, bounded history, filtering/CSV escaping, STOP/disconnect status and stable session/sample timestamps. Automated backend tests also cover forward/inverse kinematics, combined-command RPM saturation, smooth wheel ramps, forward/reverse/arc/spin integration, encoder polarity, waypoint management, full sequence execution, obstacle detours, unreachable destinations, final yaw, return home, mission progress, command arbitration, pause/resume, STOP, collision guarding, disconnect and lease expiry. Phase 4B tests definitions, capacity/order, multi-step A/B/C/Home execution, WAIT, pause/resume, STOP, disconnect/lease expiry, collision/unreachable paths, no automatic queue advancement, SQLite recovery, history and analytics; browser coverage includes creation/templates, explicit execution, confirmation, history filtering/CSV and mobile layout. Phase 4A adds deterministic ray distances, translation/rotation, boundary/unknown/corner/max-range behavior, no-return classification, sensor scheduling/payload budgets, pose immutability, disconnected camera, read-only sensor transport and fault isolation. Browser tests exercise real UI/WebSocket integration, polar/overlay rendering, stale/disconnected/invalid sensor states, mission continuity during sensor outages and responsive layouts.
 
 This is an **educational navigation simulation, not production-grade Nav2**. The map is static; there are no dynamic obstacles, SLAM, localization uncertainty, wheel slip, torque, battery physics or live sensors. The conservative circular footprint can reject passages that a precisely oriented square could fit. A collision guard stops rather than replanning automatically. Test-only obstacle injection exercises runtime blocking; there is no dynamic-map editing UI. Each short curved integration step is guarded using its endpoint chord and a conservative footprint margin; this is not a continuous curved-body physics engine. Mission progress reflects consumed path points, rather than a time or distance estimate. Home and valid waypoints persist; live missions, encoders, diagnostics counters, histories and event logs reset with the backend. New sessions initialize pose at saved Home; the trail retains 1200 points. Use one worker. Telemetry currently includes the bounded path and trail at 10 Hz; larger maps would need separate map/path transport. Saved waypoint slots are shared across browser clients; selected draft goals and sequence edits are local to the Navigation view.
 

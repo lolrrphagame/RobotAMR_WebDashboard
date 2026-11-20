@@ -14,12 +14,17 @@ from .models import command_adapter, ConfigurationCommand, WaypointCommand
 from .configuration import ConfigurationStore, ConfigurationError, ConfigurationConflict
 from .exports import filter_events, csv_export
 from .simulator import RobotSimulator
+from .operations import DefinitionStore, MissionDefinition, OperationsCommand
+from pydantic import TypeAdapter
+from .models import ControlCommand, NavigationCommand, WaypointCommand, ConfigurationCommand
+operations_adapter = TypeAdapter(ControlCommand | NavigationCommand | WaypointCommand | ConfigurationCommand | OperationsCommand)
 
 @asynccontextmanager
 async def lifespan(app):
     path = os.getenv("ROBOT_CONFIG_PATH", str(Path(__file__).resolve().parents[1] / "data" / "robot-config.json"))
     store = None if path == ":memory:" else ConfigurationStore(path)
-    app.state.robot = RobotSimulator(store=store)
+    database = os.getenv("MISSION_DB_PATH", str(Path(__file__).resolve().parents[1] / "data" / "missions.sqlite3"))
+    app.state.robot = RobotSimulator(store=store, operations_store=DefinitionStore(database))
     async def simulate():
         previous = time.monotonic()
         while True:
@@ -32,7 +37,9 @@ async def lifespan(app):
     task.cancel()
     with suppress(asyncio.CancelledError):
         await task
+    app.state.robot.operations.finish("interrupted", "Service shutdown; explicit restart required")
     app.state.robot.stop("Service shutdown")
+    app.state.robot.operations.store.close()
 
 app = FastAPI(title="PBL4 AMR Simulation API", lifespan=lifespan)
 origins = os.getenv("ALLOWED_ORIGINS", "http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:4173,http://localhost:4173").split(",")
@@ -111,7 +118,7 @@ async def telemetry(socket: WebSocket):
                 if len(raw) > 2048:
                     raise ValueError("Command too large")
                 robot.counters["ws_rx_frames"] += 1
-                command = command_adapter.validate_python(json.loads(raw))
+                command = operations_adapter.validate_python(json.loads(raw))
                 if not robot.command(command, client):
                     await socket.send_json({"type": "error", "message": "Control is reserved by another client or mode. Cancel autonomous navigation before manual driving."})
                 elif command.type not in ("heartbeat", "control", "release"):
@@ -202,3 +209,41 @@ async def sensor_stream(socket: WebSocket):
             task.cancel()
         with suppress(asyncio.CancelledError):
             await asyncio.gather(*tasks, return_exceptions=True)
+
+
+@app.get('/api/missions')
+async def mission_operations():
+    r=app.state.robot.operations
+    return {**r.snapshot(),'history':r.history()[:200],'analytics':r.analytics()}
+
+@app.post('/api/missions')
+async def create_mission(definition: MissionDefinition, template: bool=False):
+    try:return app.state.robot.operations.create(definition,template)
+    except ValueError as exc:raise HTTPException(400,str(exc)) from exc
+
+@app.post('/api/missions/queue/order')
+async def reorder_missions(ids:list[str]):
+    try:app.state.robot.operations.reorder(ids)
+    except ValueError as exc:raise HTTPException(400,str(exc)) from exc
+    return {'status':'ok'}
+
+@app.delete('/api/missions/queue')
+async def clear_missions(confirm:bool=False):
+    if not confirm:raise HTTPException(400,'Explicit confirmation is required to clear the queue')
+    ops=app.state.robot.operations;ops.store.replace('queue',[]);ops.queue=[]
+    return {'status':'ok'}
+
+@app.delete('/api/missions/{id}')
+async def remove_mission(id:str,template:bool=False):
+    try:app.state.robot.operations.remove(id,template)
+    except ValueError as exc:raise HTTPException(404,str(exc)) from exc
+    return {'status':'ok'}
+
+@app.get('/api/missions/history')
+async def mission_history(status:Literal['all','completed','cancelled','failed','interrupted']='all',q:str=Query('',max_length=200),format:Literal['json','csv']='json'):
+    rows=app.state.robot.operations.history(status,q)
+    if format=='csv':
+        columns=['id','mission_id','name','started_at','finished_at','duration','status','distance','completed_steps','waypoint_visits','reason','start_pose','end_pose','steps']
+        export_rows=[{**r,'steps':json.dumps(r['steps']),'start_pose':json.dumps(r['start_pose']),'end_pose':json.dumps(r['end_pose'])} for r in rows]
+        return Response(csv_export(export_rows,columns),media_type='text/csv',headers={'Content-Disposition':'attachment; filename="pbl4-missions.csv"'})
+    return {'records':rows[:1000],'total':len(rows)}

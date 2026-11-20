@@ -13,13 +13,14 @@ from .telemetry import snapshot
 from .configuration import ConfigurationManager, ConfigurationError, ConfigurationConflict
 from .diagnostics import history_sample
 from .sensors.manager import SensorManager
+from .operations import Operations, OperationsCommand
 
 COMMAND_TIMEOUT = 0.6
 AUTONOMOUS_TIMEOUT = 1.5
 
 
 class RobotSimulator:
-    def __init__(self, config: DriveConfig | None = None, grid=None, store=None):
+    def __init__(self, config: DriveConfig | None = None, grid=None, store=None, operations_store=None):
         self.session_id = uuid4().hex
         self.started = time.monotonic()
         self.sample_timestamp = datetime.now(timezone.utc).isoformat()
@@ -50,6 +51,7 @@ class RobotSimulator:
         self.log("info", "Navigation simulator initialized. All hardware interfaces disabled.")
         for warning in self.configuration.warnings:
             self.log("warning", warning)
+        self.operations = Operations(self, operations_store)
         self.history.append(history_sample(self.snapshot()))
 
     @property
@@ -61,8 +63,12 @@ class RobotSimulator:
         return self.state.counts
 
     @property
+    def autonomous_active(self):
+        return self.mission.active or (hasattr(self,"operations") and self.operations.active)
+
+    @property
     def mode(self):
-        return "AUTONOMOUS" if self.mission.active else "MANUAL" if self.owner else "STANDBY"
+        return "AUTONOMOUS" if self.autonomous_active else "MANUAL" if self.owner else "STANDBY"
 
     def log(self, level, message):
         self.event_id += 1
@@ -76,6 +82,7 @@ class RobotSimulator:
     def stop(self, reason="STOP: motion and mission cancelled"):
         self.safety.update(stop_active=True, last_stop_reason=reason, watchdog="disarmed")
         self.counters["stop_commands"] += 1
+        self.operations.finish("cancelled",reason)
         active = self.owner is not None or self.mission.status != "idle"
         self.halt()
         self.owner = None
@@ -112,7 +119,7 @@ class RobotSimulator:
     def release(self, client, reason="Manual input released"):
         if self.manual_collision_command and self.manual_collision_command[0] == client:
             self.manual_collision_command = None
-        if self.owner == client and not self.mission.active:
+        if self.owner == client and not self.autonomous_active:
             self.halt()
             self.safety["watchdog"] = "disarmed"
             self.owner = None
@@ -124,7 +131,10 @@ class RobotSimulator:
         if self.owner != client:
             return
         self.safety["watchdog"] = "disconnected"
-        if self.mission.active:
+        if self.operations.active:
+            self.operations.pause("Controller disconnected or heartbeat expired; explicit resume required",release=True)
+            return
+        if self.autonomous_active:
             self.halt()
             self.owner = None
             self.mission.status = "paused"
@@ -135,6 +145,14 @@ class RobotSimulator:
             self.safety["watchdog"] = "disconnected"
 
     def command(self, command, client: str):
+        if isinstance(command, OperationsCommand):
+            if command.action=='start_next':self.operations.start(client)
+            elif command.action=='resume':self.operations.resume(client)
+            elif command.action=='cancel':self.stop('Operations mission cancelled')
+            else:
+                if self.owner!=client or not self.operations.active:raise ValueError('Only the current operator can pause this mission')
+                self.operations.pause()
+            return True
         if isinstance(command, ConfigurationCommand):
             return self.configure_home(command)
         if isinstance(command, WaypointCommand):
@@ -165,7 +183,7 @@ class RobotSimulator:
                 self.last_lease = time.monotonic()
             return True
         self.counters["control_commands"] += 1
-        if self.mission.active or self.owner not in (None, client):
+        if self.autonomous_active or self.owner not in (None, client):
             self.counters["rejected_commands"] += 1
             return False
         # A held input cannot repeatedly restart after its collision stop.
@@ -187,7 +205,7 @@ class RobotSimulator:
 
     def configure_home(self, command):
         self.counters["configuration_commands"] += 1
-        if self.mission.active:
+        if self.autonomous_active:
             raise ConfigurationConflict("Home cannot change during a running or paused mission. Cancel the mission first.")
         home = (Goal(x=HOME[0], y=HOME[1], yaw=HOME[2], name="Home") if command.action == "reset_home" else
                 Goal(x=self.state.pose[0], y=self.state.pose[1], yaw=self.state.pose[2], name="Home")
@@ -201,10 +219,15 @@ class RobotSimulator:
 
     def navigate(self, command, client):
         action = command.action
+        if self.operations.active:
+            if action=='cancel':self.stop('Navigation cancel: operations mission cancelled');return True
+            if action=='pause' and self.owner==client:self.operations.pause();return True
+            if action=='resume':self.operations.resume(client);return True
+            raise ValueError('Mission Operations owns navigation; cancel it before starting a map mission')
         if action == "cancel":
             self.stop("Navigation cancelled")
             return True
-        if self.owner not in (None, client) or (self.owner is not None and not self.mission.active):
+        if self.owner not in (None, client) or (self.owner is not None and not self.autonomous_active):
             self.counters["rejected_commands"] += 1
             return False
         if action == "pause":
@@ -222,7 +245,7 @@ class RobotSimulator:
             self.last_lease = time.monotonic()
             self.safety.update(stop_active=False, watchdog="armed_autonomous")
         else:
-            if self.mission.active:
+            if self.autonomous_active:
                 raise ValueError("Cancel the current mission before planning another")
             goals = (self.mission.sequence(command.waypoints) if action == "sequence" else
                      [self.configuration.value.home.model_copy()] if action == "home" else [command.goal])
@@ -242,7 +265,7 @@ class RobotSimulator:
         if not 0 < dt <= 1:
             raise ValueError("Simulation timestep must be in (0, 1]")
         if self.owner is not None:
-            if self.mission.active:
+            if self.autonomous_active:
                 if time.monotonic() - self.last_lease >= AUTONOMOUS_TIMEOUT:
                     self.disconnect(self.owner)
                     self.mission.reason = "Controller heartbeat expired. Mission paused."
@@ -253,6 +276,8 @@ class RobotSimulator:
                 self.release(self.owner, "Command watchdog expired. Commands cleared.")
                 self.safety["watchdog"] = "expired"
                 self.counters["watchdog_expirations"] += 1
+        previous_pose = self.state.pose
+        self.operations.before_tick(dt)
         steps = math.ceil(dt / 0.02)
         step = dt / steps
         for _ in range(steps):
@@ -263,10 +288,11 @@ class RobotSimulator:
                 self.linear, self.angular = self.mission.follow(self.state.pose)
                 if self.mission.status == "completed":
                     self.halt()
-                    self.owner = None
+                    if not self.operations.active:self.owner = None
                     self.log("info", self.mission.reason)
                     self.mission.reset(self.mission.reason, outcome="completed")
-                    self.safety["watchdog"] = "disarmed"
+                    if self.operations.active:self.operations.complete_step()
+                    else:self.safety["watchdog"] = "disarmed"
             target = self.targets()
             actual = self.drive.accelerate(self.rpm, target, step)
             average = [(old + new) / 2 for old, new in zip(self.rpm, actual)]
@@ -275,12 +301,15 @@ class RobotSimulator:
             if moving and not self.grid.segment_free(self.state.pose, next_pose):
                 self.collision_stop(autonomous=self.mission.status == "running")
                 break
+            if self.operations.current and self.operations.current["status"]=="running":
+                self.operations.current["distance"] += math.dist(self.state.pose[:2],next_pose[:2])
             self.state.pose = next_pose
             self.state.rpm = actual
             for i in range(2):
                 self.counts[i] += average[i] * self.drive.config.encoder_cpr * step / 60
             if self.collision_origin is not None and math.dist(self.state.pose[:2], self.collision_origin) >= 0.1:
                 self.collision_origin = self.collision_source = None
+        self.operations.after_tick(dt, previous_pose)
         point = self.state.pose[:2]
         if math.dist(self.state.trajectory[-1], point) > 0.015:
             self.state.trajectory.append(point)

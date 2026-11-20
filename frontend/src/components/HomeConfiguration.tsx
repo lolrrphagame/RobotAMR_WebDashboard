@@ -10,7 +10,9 @@ export function HomeConfiguration({
   send: (command: Command) => void;
 }) {
   const locked =
-    !data || ["running", "paused"].includes(data.navigation.status);
+    !data ||
+    !!data.operations.active ||
+    ["running", "paused"].includes(data.navigation.status);
   const home = data?.home;
   return (
     <section className="panel home-configuration">

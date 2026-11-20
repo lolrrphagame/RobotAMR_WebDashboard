@@ -24,6 +24,7 @@ def snapshot(robot):
                       "wheel_separation": config.wheel_separation, "encoder_cpr": config.encoder_cpr,
                       "encoder_polarity": config.encoder_polarity, "chassis_size": CHASSIS_SIZE},
             "sensors": robot.sensors.snapshot(include_data=False),
+            "operations": {"active": robot.operations.current, "queue_count": len(robot.operations.queue)},
             "configuration": robot.configuration.snapshot(),
             "diagnostics": diagnostics(robot),
             "motors": motor_measurements(robot),

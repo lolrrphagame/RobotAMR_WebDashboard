@@ -7,7 +7,7 @@ export default defineConfig({
   webServer: [
     {
       command:
-        "cd ../backend && env -u PYTHONPATH ROBOT_CONFIG_PATH=:memory: ALLOWED_ORIGINS=http://127.0.0.1:15173 .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 18000",
+        "cd ../backend && env -u PYTHONPATH MISSION_DB_PATH=:memory: ROBOT_CONFIG_PATH=:memory: ALLOWED_ORIGINS=http://127.0.0.1:15173 .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 18000",
       url: "http://127.0.0.1:18000/api/health",
       reuseExistingServer: false,
     },

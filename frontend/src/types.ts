@@ -14,6 +14,10 @@ export interface Telemetry {
   clearance: { pose_clear: boolean; radius: number };
   trajectory: [number, number][];
   navigation: NavigationState;
+  operations: {
+    active: { id: string; status: string } | null;
+    queue_count: number;
+  };
   drive: {
     max_rpm: number;
     chassis_size: number;
@@ -168,6 +172,7 @@ export interface Diagnostics {
   };
 }
 export type Command =
+  | { type: "operations"; action: "start_next" | "pause" | "resume" | "cancel" }
   | {
       type: "configuration";
       action: "set_home" | "current_home" | "reset_home";

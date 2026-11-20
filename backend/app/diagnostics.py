@@ -40,7 +40,7 @@ def diagnostics(robot):
     measured_v, measured_w = robot.drive.forward(robot.rpm)
     age = None
     if robot.owner is not None:
-        age = max(0, (time.monotonic() - (robot.last_lease if robot.mission.active else robot.last_command)) * 1000)
+        age = max(0, (time.monotonic() - (robot.last_lease if robot.autonomous_active else robot.last_command)) * 1000)
     return {"source": "simulation", "model": "Acceleration-limited differential drive; not firmware PI",
             "motion": {"requested": {"linear": robot.linear, "angular": robot.angular},
                        "limited": {"linear": limited_v, "angular": limited_w},

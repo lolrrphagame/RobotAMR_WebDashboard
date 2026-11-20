@@ -20,6 +20,7 @@ import {
   Wifi,
   Zap,
 } from "lucide-react";
+import { MissionsPage } from "./components/MissionsPage";
 import { useState } from "react";
 import { DiagnosticsPage } from "./components/DiagnosticsPage";
 import { HomeConfiguration } from "./components/HomeConfiguration";
@@ -35,6 +36,7 @@ const pages = [
   { name: "Overview", icon: LayoutDashboard },
   { name: "Manual Control", icon: Compass },
   { name: "Navigation", icon: Radio },
+  { name: "Missions", icon: Compass },
   { name: "Sensors", icon: Radar },
   { name: "Diagnostics", icon: Activity },
   { name: "Settings", icon: Settings },
@@ -69,7 +71,7 @@ function App() {
           </span>
         </a>
         <div className="workspace-label">
-          WORKSPACE <span>PHASE 4A</span>
+          WORKSPACE <span>PHASE 4B</span>
         </div>
         <nav aria-label="Main navigation">
           {pages.map(({ name, icon: Icon }) => (
@@ -146,7 +148,7 @@ function App() {
               <strong>Simulation environment active.</strong> All telemetry and
               controls are simulated. ROS 2, UART and GPIO are disabled.
             </span>
-            <span className="banner-phase">PHASE 4A</span>
+            <span className="banner-phase">PHASE 4B</span>
           </div>
           {(!connected || error) && (
             <div className="connection-alert" role="status">
@@ -386,6 +388,9 @@ function App() {
               events={data?.events ?? []}
             />
           )}
+          {page === "Missions" && (
+            <MissionsPage send={send} connected={connected} />
+          )}
           {page === "Sensors" && (
             <SensorsPage
               bundle={sensors.bundle}
@@ -464,7 +469,7 @@ function App() {
                 ? `${Math.floor(live.uptime / 60)}m ${live.uptime % 60}s`
                 : "—"}
               <span className="footer-divider">|</span>
-              <CircleHelp size={14} /> Phase 4A · v4.0a
+              <CircleHelp size={14} /> Phase 4B · v4.0b
             </span>
           </footer>
         </div>

@@ -63,7 +63,8 @@ export function NavigationPage({
   }, [attempt]);
   const nav = data?.navigation;
   const active = nav?.status === "running" || nav?.status === "paused";
-  const canPlan = connected && !active && data?.mode !== "MANUAL";
+  const canPlan =
+    connected && !active && !data?.operations.active && data?.mode !== "MANUAL";
   const goal = selected ?? { x: 2, y: 1, yaw: 0, name: "Destination" };
   const names: WaypointName[] = ["A", "B", "C"];
   return (
