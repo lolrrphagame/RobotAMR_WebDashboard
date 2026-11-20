@@ -20,6 +20,9 @@ import {
   Zap,
 } from "lucide-react";
 import { useState } from "react";
+import { DiagnosticsPage } from "./components/DiagnosticsPage";
+import { HomeConfiguration } from "./components/HomeConfiguration";
+import { formatTimestamp } from "./utils/telemetry";
 import { NavigationPage } from "./components/NavigationPage";
 import { MissionSummary } from "./components/MissionSummary";
 import { ManualControl } from "./components/ManualControl";
@@ -34,7 +37,16 @@ const pages = [
 ];
 function App() {
   const [page, setPage] = useState("Overview");
-  const { data, history, connection, error, send, stop, release } = useRobot();
+  const {
+    data,
+    history,
+    connection,
+    error,
+    historyError,
+    send,
+    stop,
+    release,
+  } = useRobot();
   const connected = connection === "connected";
   const live = connected ? data : null;
   const value = (n: number | undefined, decimals = 2) =>
@@ -52,7 +64,7 @@ function App() {
           </span>
         </a>
         <div className="workspace-label">
-          WORKSPACE <span>PHASE 02</span>
+          WORKSPACE <span>PHASE 03</span>
         </div>
         <nav aria-label="Main navigation">
           {pages.map(({ name, icon: Icon }) => (
@@ -129,7 +141,7 @@ function App() {
               <strong>Simulation environment active.</strong> All telemetry and
               controls are simulated. ROS 2, UART and GPIO are disabled.
             </span>
-            <span className="banner-phase">PHASE 2</span>
+            <span className="banner-phase">PHASE 3</span>
           </div>
           {(!connected || error) && (
             <div className="connection-alert" role="status">
@@ -226,8 +238,14 @@ function App() {
               </div>
               <div className="operations-grid">
                 <div className="chart-stack">
-                  <RpmChart history={connected ? history : []} motor="left" />
-                  <RpmChart history={connected ? history : []} motor="right" />
+                  <RpmChart
+                    history={connected ? history.slice(-150) : []}
+                    motor="left"
+                  />
+                  <RpmChart
+                    history={connected ? history.slice(-150) : []}
+                    motor="right"
+                  />
                 </div>
                 <ManualControl
                   connected={connected && live?.mode !== "AUTONOMOUS"}
@@ -238,7 +256,7 @@ function App() {
               </div>
             </>
           )}
-          {(page === "Overview" || page === "Diagnostics") && (
+          {page === "Overview" && (
             <div className="bottom-grid">
               <section className="panel">
                 <div className="panel-heading">
@@ -344,7 +362,7 @@ function App() {
                       <div>
                         <p>{event.message}</p>
                         <time>
-                          {new Date(event.time).toLocaleTimeString()} ·{" "}
+                          {formatTimestamp(event.time)} ·{" "}
                           {event.level.toUpperCase()}
                         </time>
                       </div>
@@ -355,34 +373,13 @@ function App() {
             </div>
           )}
           {page === "Diagnostics" && (
-            <section className="panel details-panel">
-              <h2>Simulation interfaces</h2>
-              <div className="detail-grid">
-                <div>
-                  WebSocket transport<strong>{connection}</strong>
-                </div>
-                <div>
-                  Mock battery voltage
-                  <strong>{value(health?.battery_voltage, 1)} V</strong>
-                </div>
-                <div>
-                  ROS 2 Humble<strong>Not connected</strong>
-                </div>
-                <div>
-                  UART / GPIO<strong>Disabled</strong>
-                </div>
-                <div>
-                  Current pose clearance
-                  <strong>
-                    {live
-                      ? live.clearance.pose_clear
-                        ? "Clear"
-                        : "OBSTRUCTED"
-                      : "—"}
-                  </strong>
-                </div>
-              </div>
-            </section>
+            <DiagnosticsPage
+              data={live}
+              history={history}
+              lastTimestamp={data?.timestamp}
+              historyError={historyError}
+              events={data?.events ?? []}
+            />
           )}
           {page === "Navigation" && (
             <NavigationPage
@@ -393,45 +390,49 @@ function App() {
             />
           )}
           {page === "Settings" && (
-            <section className="panel details-panel">
-              <div className="panel-heading">
-                <div>
-                  <span className="eyebrow">READ-ONLY CONFIGURATION</span>
-                  <h2>Robot & simulation parameters</h2>
-                </div>
-                <ShieldCheck size={24} />
-              </div>
-              <div className="detail-grid">
-                {[
-                  ["Wheel radius", "0.0435 m"],
-                  ["Wheel speed limit", "40 RPM per wheel"],
-                  ["Chassis", "250 × 250 mm · two wheels + caster"],
-                  [
-                    "Encoder polarity (raw)",
-                    live?.drive.encoder_polarity.join(", ") ?? "+1, -1",
-                  ],
-                  ["Autonomous heartbeat timeout", "1.5 s"],
-                  ["Wheel separation", "0.300 m"],
-                  ["Encoder resolution", "≈ 3,960 counts/rev"],
-                  ["Telemetry rate", "10 Hz"],
-                  ["Command timeout", "600 ms"],
-                  ["Control heartbeat", "150 ms"],
-                  ["Planned UART baud", "57,600 (disabled)"],
-                  ["Planned compute", "Raspberry Pi 4"],
-                  ["Planned motor controller", "ESP32-S3 N16R8"],
-                  ["Operating environment", "Simulation only"],
-                ].map(([label, val]) => (
-                  <div key={label}>
-                    {label}
-                    <strong>{val}</strong>
+            <>
+              <HomeConfiguration data={live} send={send} />
+              <section className="panel details-panel">
+                <div className="panel-heading">
+                  <div>
+                    <span className="eyebrow">READ-ONLY CONFIGURATION</span>
+                    <h2>Robot & simulation parameters</h2>
                   </div>
-                ))}
-              </div>
-              <p className="muted">
-                Configuration is fixed for Phase 2. No hardware adapters are
-                installed or invoked.
-              </p>
-            </section>
+                  <ShieldCheck size={24} />
+                </div>
+                <div className="detail-grid">
+                  {[
+                    ["Wheel radius", "0.0435 m"],
+                    ["Wheel speed limit", "40 RPM per wheel"],
+                    ["Chassis", "250 × 250 mm · two wheels + caster"],
+                    [
+                      "Encoder polarity (raw)",
+                      live?.drive.encoder_polarity.join(", ") ?? "+1, -1",
+                    ],
+                    ["Autonomous heartbeat timeout", "1.5 s"],
+                    ["Wheel separation", "0.300 m"],
+                    ["Encoder resolution", "≈ 3,960 counts/rev"],
+                    ["Telemetry rate", "10 Hz"],
+                    ["Command timeout", "600 ms"],
+                    ["Control heartbeat", "150 ms"],
+                    ["Planned UART baud", "57,600 (disabled)"],
+                    ["Planned compute", "Raspberry Pi 4"],
+                    ["Planned motor controller", "ESP32-S3 N16R8"],
+                    ["Operating environment", "Simulation only"],
+                  ].map(([label, val]) => (
+                    <div key={label}>
+                      {label}
+                      <strong>{val}</strong>
+                    </div>
+                  ))}
+                </div>
+                <p className="muted">
+                  Home and waypoints are saved on the backend. Drive geometry
+                  remains read-only. No hardware adapters are installed or
+                  invoked.
+                </p>
+              </section>
+            </>
           )}
           <footer className="page-footer">
             <span>
@@ -443,7 +444,7 @@ function App() {
                 ? `${Math.floor(live.uptime / 60)}m ${live.uptime % 60}s`
                 : "—"}
               <span className="footer-divider">|</span>
-              <CircleHelp size={14} /> Phase 2 · v2.0
+              <CircleHelp size={14} /> Phase 3 · v3.0
             </span>
           </footer>
         </div>

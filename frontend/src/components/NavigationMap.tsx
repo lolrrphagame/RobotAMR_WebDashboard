@@ -266,23 +266,34 @@ export function NavigationMap({
               strokeWidth="0.025"
               strokeOpacity=".75"
             />
-            <circle
-              cx={data.home.x}
-              cy={-data.home.y}
-              r="0.14"
-              fill="#16323c"
-              stroke="#36aa9c"
-              strokeWidth="0.02"
-            />
-            <text
-              x={data.home.x}
-              y={-data.home.y + 0.04}
-              textAnchor="middle"
-              fontSize=".12"
-              fill="#66dbca"
+            <g
+              data-testid="home-marker"
+              transform={`translate(${data.home.x} ${-data.home.y}) rotate(${(-data.home.yaw * 180) / Math.PI})`}
             >
-              H
-            </text>
+              <path
+                d="M 0 -.21 L .21 0 L 0 .21 L -.21 0 Z"
+                fill="#403216"
+                stroke="#efcc78"
+                strokeWidth=".025"
+              />
+              <text
+                y=".05"
+                textAnchor="middle"
+                fontSize=".14"
+                fill="#ffe0a1"
+                transform={`rotate(${(data.home.yaw * 180) / Math.PI})`}
+              >
+                H
+              </text>
+              <line
+                x1=".22"
+                x2=".42"
+                y1="0"
+                y2="0"
+                stroke="#efcc78"
+                strokeWidth=".025"
+              />
+            </g>
           </>
         )}
         {Object.entries(data?.navigation.waypoints ?? {}).map(

@@ -47,4 +47,16 @@ class WaypointCommand(StrictModel):
         return self
 
 
-command_adapter = TypeAdapter(Annotated[ControlCommand | NavigationCommand | WaypointCommand, Field(discriminator="type")])
+class ConfigurationCommand(StrictModel):
+    type: Literal["configuration"]
+    action: Literal["set_home", "current_home", "reset_home"]
+    goal: Goal | None = None
+
+    @model_validator(mode="after")
+    def validate_home(self):
+        if self.action == "set_home" and self.goal is None:
+            raise ValueError("Select a Home pose first")
+        return self
+
+
+command_adapter = TypeAdapter(Annotated[ControlCommand | NavigationCommand | WaypointCommand | ConfigurationCommand, Field(discriminator="type")])

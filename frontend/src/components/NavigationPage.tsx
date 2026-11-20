@@ -9,6 +9,8 @@ import {
   Square,
   Trash2,
 } from "lucide-react";
+import { HomeConfiguration } from "./HomeConfiguration";
+import { formatTimestamp } from "../utils/telemetry";
 import { NavigationMap } from "./NavigationMap";
 import { MissionSummary } from "./MissionSummary";
 import type {
@@ -98,7 +100,7 @@ export function NavigationPage({
                   <div>
                     <p>{event.message}</p>
                     <time>
-                      {new Date(event.time).toLocaleTimeString()} ·{" "}
+                      {formatTimestamp(event.time)} ·{" "}
                       {event.level.toUpperCase()}
                     </time>
                   </div>
@@ -281,6 +283,7 @@ export function NavigationPage({
               </p>
             </div>
           </section>
+          <HomeConfiguration data={data} selected={goal} send={send} />
           <section className="panel waypoint-panel">
             <div className="panel-heading">
               <h2>

@@ -1,4 +1,4 @@
-# PBL4 AMR Mission Control — Phase 2
+# PBL4 AMR Mission Control — Phase 3
 
 A simulation-only industrial robot dashboard built with React, TypeScript, Vite, Tailwind CSS, Recharts and FastAPI. No ROS, serial, GPIO, camera or motor interfaces are imported or opened. All controls, encoder readings and health values are simulated.
 
@@ -44,7 +44,7 @@ cd ~/Projects/PBL4_Dashboard/frontend
 npm run dev -- --port 5173 --strictPort
 ```
 
-Open **http://127.0.0.1:5173**. API documentation is at **http://127.0.0.1:8000/docs**. Stop each server with `Ctrl+C`. Use one backend worker: simulated state lives in memory and resets on restart.
+Open **http://127.0.0.1:5173**. API documentation is at **http://127.0.0.1:8000/docs**. Stop each server with `Ctrl+C`. Use one backend worker: live motion, missions, counters, logs and history reset on restart. Saved Home and waypoints persist separately; a new session starts stationary at its validated saved Home.
 
 The Vite development and preview servers proxy `/api` and `/ws` to port 8000. There is no separate browser API URL to configure. Keep both servers running. A disconnected dashboard automatically reconnects every two seconds, hides stale values, and never resumes a previous drive command.
 
@@ -80,17 +80,17 @@ Browser tests start isolated frontend/backend servers on ports **15173 and 18000
 - **Overview:** authoritative map pose, heading, operating mode, mission status/progress, linear/angular velocity, both wheel RPMs, two target/actual RPM charts, encoder counts, system health and event stream.
 - **Manual Control:** the same telemetry and hold-to-drive controls. Hold a directional button using mouse/touch or focus it and hold Enter/Space. Releasing stops the simulated robot. Use STOP at any time. Space outside buttons and input controls also stops.
 - **Navigation:** interactive SVG occupancy map, virtual AMR with two powered wheels and a caster, heading, coordinate grid, planned path, trajectory, goal/heading selection, zoom/pan/reset, mission controls, A/B/C waypoint management and mission events.
-- **Diagnostics:** simulated CPU, memory, temperature, battery, encoders, interface state and logs.
-- **Settings:** read-only robot geometry and simulation configuration.
+- **Diagnostics:** Motors, System Health, Communication and Events tabs with simulated measurements, bounded history, honest unavailable hardware fields, filtering and CSV exports.
+- **Settings:** saved Home controls and read-only robot geometry/simulation parameters. Home can also be configured directly from Navigation.
 
-Charts retain the most recent 150 samples (approximately 15 seconds at 10 Hz). The virtual robot starts at home **(1.0 m, 1.0 m, 0 rad)**, stationary; hold a direction to see target and actual RPM responses. Wheel response uses a **60 RPM/s slew limit** for smooth acceleration, deceleration and reversal. Both target and actual speeds stay within **±40 RPM**. This is a kinematic model, not a firmware PI implementation or a measured hardware model. Health values are synthetic. Event history is bounded to 60 entries and is not persisted.
+Charts retain the most recent 150 samples (approximately 15 seconds at 10 Hz). The virtual robot starts stationary at its validated saved Home (default **1.0 m, 1.0 m, 0 rad**); hold a direction to see target and actual RPM responses. Wheel response uses a **60 RPM/s slew limit** for smooth acceleration, deceleration and reversal. Both target and actual speeds stay within **±40 RPM**. This is a kinematic model, not a firmware PI implementation or a measured hardware model. Health values are synthetic. Event history is bounded to 60 entries and is not persisted.
 
 ## Navigate the virtual AMR
 
 1. Open **Navigation**. Click free space on the map, or enter X/Y coordinates. Occupied cells are blue-gray; dark cells are free space.
 2. Choose a final heading with the slider. Alternatively select the map's **Heading** tool and click toward the desired heading from the goal marker. World +x is 0°, +y is 90°, and positive yaw turns counterclockwise.
 3. Choose **Plan path** to preview A*, then **Start navigation** to plan from the current actual pose and move. Starting also works without a preview.
-4. **Pause** holds the robot still and retains the mission. **Resume** replans unfinished legs and continues. **Cancel mission** and **STOP** immediately zero motion, clear the live route/destination/progress (including a blocked mission), and return the display to **IDLE**. Saved waypoints remain available. **Return home** plans a mission back to (1,1,0); cancel an active mission first.
+4. **Pause** holds the robot still and retains the mission. **Resume** replans unfinished legs and continues. **Cancel mission** and **STOP** immediately zero motion, clear the live route/destination/progress (including a blocked mission), and return the display to **IDLE**. Saved waypoints remain available. **Return home** plans a mission back to the configured Home, including its heading; cancel an active mission first.
 5. Save the selected goal into slots **A**, **B**, or **C** using each row's save icon. **Use current robot pose** selects the live pose for saving. Slots can be overwritten or deleted; active mission goals are copied and do not change when a saved slot is edited.
 6. Use **+** beside saved slots to build a sequence of up to 12 visits, including repeated slots. Click a sequence chip to remove it. Choose **Run waypoint sequence**, or use a row's play icon for a single waypoint. All legs must have valid paths before the mission starts.
 
@@ -99,6 +99,44 @@ Drag the map to pan, or select **Pan**. Use zoom and reset controls in the toolb
 The fixed warehouse is **8 × 6 m**, with **0.20 m cells**. Planning uses footprint-aware **4-connected A*** and a conservative circular envelope (about 0.202 m radius). The follower turns toward each path point, advances slowly, then aligns final yaw. Completion tolerances are **35 mm** and **0.035 rad** (about 2°). Poses use SI units, yaw radians, a `map` frame, and row-major occupancy metadata, leaving a clear boundary for a future OccupancyGrid/TF adapter. There is no ROS transform subscription.
 
 The audited route is **A=(2,1,0), B=(2,2,0), C=(1,2,0), then Home=(1,1,0)**. Tests verify every visit and independent home-to-A/B/C round trips. A longer obstacle-detour example is (4.5,1,90°). Crossing the central wall requires a detour; the planner checks all segments against the inflated footprint. The educational follower can take a minute or more for longer missions at these wheel speeds.
+
+## Phase 3: persistent Home and waypoints
+
+On **Navigation**, choose a map destination and heading, then select **Set Selected as Home**. **Set Current Pose as Home** copies the authoritative current pose. **Reset Default Home** restores (1,1,0). Settings also offers current-pose and default-Home actions. The saved Home is displayed with coordinates and heading and uses a distinct gold diamond/H marker with a heading line.
+
+Every Home update is checked against the map and the same footprint clearance as navigation. Home changes are rejected while a mission is **running or paused**, including through the API; rejection does not pause the mission or change its owner. A change never teleports or resets the current robot, encoders, wheels or trajectory. Return Home always plans to the currently saved Home. Only a **new backend session** initializes pose at saved Home, stationary with zero encoders.
+
+The default configuration file is **`backend/data/robot-config.json`**, excluded from Git. It stores version 1, Home, and A/B/C waypoint poses/headings, not measured telemetry or active missions. Override its location using an absolute `ROBOT_CONFIG_PATH` when starting Uvicorn. `ROBOT_CONFIG_PATH=:memory:` explicitly disables persistence, primarily for isolated browser tests.
+
+Saves write a temporary file in the same directory, flush/fsync it, then atomically replace the destination. In-memory configuration is updated only after successful replacement. Permission/disk failures report an error and leave the previous configuration in memory and on disk. Use a **single backend worker/process** per configuration file; cross-process editing is not supported. Local storage must be writable. No system installation is needed.
+
+Startup validates Home and every waypoint against the active map. Invalid Home falls back to default Home; invalid waypoints are skipped individually. A corrupt/unsupported file falls back to defaults with visible warning events and is left untouched until an explicit successful save. If neither saved nor default Home has clearance, startup fails rather than creating an unsafe initial pose. Load warnings are cleared after a successful configuration save; historical warning events remain until evicted.
+
+A/B/C save, overwrite and delete actions persist immediately. Existing mission goals are copied, so editing saved slots cannot alter an active sequence. Configurations are shared across tabs; draft goals and sequence edits remain local to the Navigation view.
+
+Home commands work over the WebSocket or `POST /api/configuration`:
+
+```json
+{"type":"configuration","action":"set_home","goal":{"x":2,"y":2,"yaw":1.570796}}
+{"type":"configuration","action":"current_home"}
+{"type":"configuration","action":"reset_home"}
+```
+
+The POST API returns the updated configuration, **409** for Home changes during running/paused missions, **400** for clearance/storage failures, and **422** for invalid request fields. WebSocket business-rule failures return an error frame without altering motion ownership. Configuration files should be backed up separately if needed; no cloud storage is used.
+
+## Phase 3: diagnostics and exports
+
+- **Motors:** target/actual RPM, signed tracking error (`target − actual`), independent normalized/raw encoders, wheel velocity, estimated signed net wheel travel, requested/limited/measured body motion, saturation, watchdog state, STOP latch/reason and pose clearance. RPM saturation proportionally scales targets to ±40 RPM. Travel is derived from full-resolution normalized encoder integration, not rounded displayed counts.
+- **Response history:** actual/target charts for both motors over up to 600 samples (approximately 60 seconds). Overview keeps its existing 15-second chart window.
+- **Future PI telemetry:** per-motor `pi` fields (`kp`, `ki`, `pwm`, `control_error`, `integral_term`) are **null / Unavailable** with source `unavailable`. No PI gains, PWM or integrator values are invented; the plant is acceleration-limited, not the ESP32 firmware PI controller. The UI reads these fields from the telemetry contract for future explicitly sourced data.
+- **System Health:** synthetic CPU, RAM, temperature and battery history. These are not Raspberry Pi or battery sensor readings. Some synthetic channels are intentionally constant.
+- **Communication:** disabled ROS 2 Humble and UART contracts. Planned nodes/topics and 20/10/15 Hz rates are proposed design targets, not verified runtime frequencies. `/diagnostics` compatibility is planned as `diagnostic_msgs/DiagnosticArray`. ROS message timestamps/observed rates remain null. UART is planned for **57600 baud**, but heartbeat/watchdog, TX/RX, hardware command/fault counters and message timestamps remain null/unavailable. WebSocket service counters are shown separately and never represented as UART activity.
+- **Events:** filter INFO/WARNING/ERROR, case-insensitive keyword search and export matching backend events as CSV. CSV quoting preserves commas/quotes; formula-like string cells are escaped. Export errors are visible.
+- **Freshness:** connection state, physical sample age and last-update time are displayed. Live motor measurements disappear on disconnect; retained charts/events are historical. Reconnection hydrates backend history. A new `session_id` clears prior-session chart samples rather than mixing reset encoders and motion histories.
+
+The backend retains **600 compact history samples** and **60 events** in bounded deques. The frontend also caps history at 600 and deduplicates physical sample timestamps. Only the compact measurements are buffered, not copies of full paths/trajectories. CSV telemetry exports include timestamp/session/source, pose, requested/measured body motion, both target/actual/error RPMs, encoders, wheel travel, saturation and system health. Exports use the backend's current retained buffer and reset after backend restart. There is no unlimited logging or historical database.
+
+Browser integration tests use ports 15173/18000 and **memory-only configuration**, never the developer's saved Home/waypoints. Python API tests use isolated temporary configuration files; persistence tests explicitly reopen the store across simulator/lifespan restarts.
 
 ## Navigation command examples
 
@@ -122,7 +160,7 @@ Send these over the existing WebSocket, with `heartbeat` messages every 150 ms w
 
 ## Safety behavior
 
-All command handling is in memory. There are no motor, UART, GPIO or ROS dependencies.
+All motion command handling remains in memory; only Home and waypoint configuration is written to local storage. There are no motor, UART, GPIO or ROS dependencies.
 
 - Frontend sends a control heartbeat every 150 ms only while a direction is held.
 - Manual pointer release/cancel, lost pointer capture, keyboard release, focus loss, hidden tab, page change, slider change and control unmount send an owner-scoped `release`. This stops manual motion without cancelling an autonomous mission or another client’s command. Page exit/unmount closes the controller connection.
@@ -145,6 +183,11 @@ All command handling is in memory. There are no motor, UART, GPIO or ROS depende
 | `GET /api/health` | Service health, `simulation: true`, `hardware_enabled: false` |
 | `GET /api/robot/status` | Current shared simulator snapshot |
 | `GET /api/map` | Static row-major simulated occupancy grid with origin, resolution, frame and clearance radius |
+| `GET /api/configuration` | Saved Home, A/B/C waypoints, storage mode and startup validation warnings |
+| `POST /api/configuration` | Validated `set_home`, `current_home`, `reset_home` commands |
+| `POST /api/waypoints` | Validated save/delete waypoint commands |
+| `GET /api/events?level=warning&q=collision&format=csv` | Filtered bounded event export (`format=json` by default) |
+| `GET /api/diagnostics/history?limit=600&format=csv` | Retained compact telemetry export (`format=json` by default) |
 | `WS /ws/telemetry` | 10 Hz snapshots and simulated control input |
 
 Control message (repeat while held):
@@ -159,7 +202,7 @@ Stop message:
 {"type":"stop"}
 ```
 
-Telemetry contains `type`, `simulation`, UTC `timestamp`, `mode`, `uptime`, measured simulated `linear_velocity`/`angular_velocity`, `motors`, `health`, `events`, `pose`, `home`, `trajectory`, `drive`, `clearance` and `navigation`. Navigation includes status, progress, active destination, current waypoint/index, planned path and saved waypoints. Each motor provides `target_rpm`, `actual_rpm`, normalized signed `encoder_count` and `raw_encoder_count`. UI timestamps are displayed in the browser's local timezone. Error frames use `{"type":"error","message":"..."}`. Successful one-shot commands receive `{"type":"ack"}`; telemetry remains the authoritative result.
+Telemetry contains `type`, `simulation`, UTC `timestamp`, `mode`, `uptime`, measured simulated `linear_velocity`/`angular_velocity`, `motors`, `health`, `events`, `pose`, `home`, `trajectory`, `drive`, `clearance`, `configuration`, `diagnostics`, `session_id` and `navigation`. Navigation includes status, progress, active destination, current waypoint/index, planned path and saved waypoints. Each motor provides `target_rpm`, `actual_rpm`, normalized signed `encoder_count` and `raw_encoder_count`. UI event/history timestamps consistently use **Asia/Ho_Chi_Minh (UTC+07)**; exports retain UTC ISO 8601 timestamps. Sample timestamps refer to the last physics update, not each HTTP/WebSocket read. Error frames use `{"type":"error","message":"..."}`. Successful one-shot commands receive `{"type":"ack"}`; telemetry remains the authoritative result.
 
 Browser WebSocket origins are checked. Defaults allow localhost/127.0.0.1 on ports 5173 and 4173. For a different local origin, set a comma-separated `ALLOWED_ORIGINS` when starting the backend. No wildcard is used by default.
 
@@ -173,6 +216,10 @@ frontend/
   src/components/NavigationPage.tsx  Goal, waypoint and mission UI
   src/components/NavigationMap.tsx   SVG map rendering and interactions
   src/components/MissionSummary.tsx  Shared pose/mode/progress readout
+  src/components/HomeConfiguration.tsx  Saved Home actions
+  src/components/DiagnosticsPage.tsx  Diagnostics tabs and freshness
+  src/components/diagnostics/       Motors, health, communication and events
+  src/utils/telemetry.ts            Consistent timestamps, history merge, CSV downloads
   src/hooks/useRobot.ts          WebSocket lifecycle, history, reconnect, heartbeat
   src/types.ts                   Telemetry/control types
   src/styles.css                 Tailwind import and responsive mission-control theme
@@ -187,6 +234,10 @@ backend/
   app/navigation.py             Occupancy grid, footprint collision checks, A*
   app/mission.py                Waypoints, mission lifecycle and path follower
   app/telemetry.py               Shared HTTP/WebSocket state serialization
+  app/configuration.py           Validated Home/waypoints and atomic persistence
+  app/diagnostics.py             Simulated measurements and future interface contracts
+  app/exports.py                 Event filtering and CSV formatting
+  data/robot-config.json         Runtime configuration (ignored by Git)
   tests/                        API and simulator safety tests
   requirements.txt              Direct dependencies
   requirements.lock.txt         Tested dependency versions
@@ -196,15 +247,15 @@ Geometry: wheel radius **0.0435 m**, separation **0.300 m**, encoder resolution 
 
 The frontend never integrates robot pose or creates a second simulation. HTTP and WebSocket serialize the same backend state. The API and UI are independent of the plant implementation. A later phase can introduce an explicit robot adapter implementing the simulator's command, stop, disconnect, tick and snapshot contract, with an rclpy bridge behind it. That future phase must define its hardware command ownership, watchdog and authentication separately. No hardware integration is included here.
 
-## Phase 2 verification and limits
+## Phase 3 verification and limits
 
-Verified: **70 backend tests**, **5 browser integration tests**, and the frontend production build pass. The build reports a non-blocking large-chunk warning; the backend test dependency reports an AnyIO deprecation warning.
+Verified: **89 backend tests**, **8 browser integration tests**, and the frontend production build pass. The build reports a non-blocking large-chunk warning; the backend test dependency reports an AnyIO deprecation warning.
 
-Audit regressions cover manual versus autonomous collisions, warning deduplication, held-input inhibition, STOP/cancel after blocking, idle state cleanup, footprint boundary/corner clearance, continuous grazing-corner collision detection, the observed dashboard pose clearance, exact A/B/C sequence visits and return home, independent wheel encoder integration, and odometry invariance under raw encoder polarity changes. Automated backend tests also cover forward/inverse kinematics, combined-command RPM saturation, smooth wheel ramps, forward/reverse/arc/spin integration, encoder polarity, waypoint management, full sequence execution, obstacle detours, unreachable destinations, final yaw, return home, mission progress, command arbitration, pause/resume, STOP, collision guarding, disconnect and lease expiry. Browser tests exercise real UI/WebSocket integration and responsive layouts.
+Audit regressions cover manual versus autonomous collisions, warning deduplication, held-input inhibition, STOP/cancel after blocking, idle state cleanup, footprint boundary/corner clearance, continuous grazing-corner collision detection, the observed dashboard pose clearance, exact A/B/C sequence visits and return home, independent wheel encoder integration, and odometry invariance under raw encoder polarity changes. Phase 3 adds Home/current-pose/reset validation and persistence, no-teleport checks, configured Return Home, waypoint heading restore/overwrite/delete/sequence, corrupt-file fallback, failed-write rollback, diagnostics calculations, unavailable PI/UART data, bounded history, filtering/CSV escaping, STOP/disconnect status and stable session/sample timestamps. Automated backend tests also cover forward/inverse kinematics, combined-command RPM saturation, smooth wheel ramps, forward/reverse/arc/spin integration, encoder polarity, waypoint management, full sequence execution, obstacle detours, unreachable destinations, final yaw, return home, mission progress, command arbitration, pause/resume, STOP, collision guarding, disconnect and lease expiry. Browser tests exercise real UI/WebSocket integration and responsive layouts.
 
-This is an **educational navigation simulation, not production-grade Nav2**. The map is static; there are no dynamic obstacles, SLAM, localization uncertainty, wheel slip, torque, battery physics or live sensors. The conservative circular footprint can reject passages that a precisely oriented square could fit. A collision guard stops rather than replanning automatically. Test-only obstacle injection exercises runtime blocking; there is no dynamic-map editing UI. Each short curved integration step is guarded using its endpoint chord and a conservative footprint margin; this is not a continuous curved-body physics engine. Mission progress reflects consumed path points, rather than a time or distance estimate. Waypoints, missions and pose reset with the backend; the trail retains 1200 points. Use one worker. Telemetry currently includes the bounded path and trail at 10 Hz; larger maps would need separate map/path transport. Saved waypoint slots are shared across browser clients; selected draft goals and sequence edits are local to the Navigation view.
+This is an **educational navigation simulation, not production-grade Nav2**. The map is static; there are no dynamic obstacles, SLAM, localization uncertainty, wheel slip, torque, battery physics or live sensors. The conservative circular footprint can reject passages that a precisely oriented square could fit. A collision guard stops rather than replanning automatically. Test-only obstacle injection exercises runtime blocking; there is no dynamic-map editing UI. Each short curved integration step is guarded using its endpoint chord and a conservative footprint margin; this is not a continuous curved-body physics engine. Mission progress reflects consumed path points, rather than a time or distance estimate. Home and valid waypoints persist; live missions, encoders, diagnostics counters, histories and event logs reset with the backend. New sessions initialize pose at saved Home; the trail retains 1200 points. Use one worker. Telemetry currently includes the bounded path and trail at 10 Hz; larger maps would need separate map/path transport. Saved waypoint slots are shared across browser clients; selected draft goals and sequence edits are local to the Navigation view.
 
-Raw encoder polarity defaults to **left +1, right −1**, and remains configurable using `DriveConfig(encoder_polarity=(1, -1))` when constructing a simulator. Each wheel independently integrates its own average RPM over each physics substep. Normalized counts use positive-forward wheel motion on both sides, and differential-drive pose integration always uses normalized wheel RPM, so raw polarity cannot reverse odometry; `raw_encoder_count` applies the configured sign. This is configuration for later adapters, not a hardware connection. No dependencies, ROS repositories or ESP32 repositories were changed for Phase 2.
+Raw encoder polarity defaults to **left +1, right −1**, and remains configurable using `DriveConfig(encoder_polarity=(1, -1))` when constructing a simulator. Each wheel independently integrates its own average RPM over each physics substep. Normalized counts use positive-forward wheel motion on both sides, and differential-drive pose integration always uses normalized wheel RPM, so raw polarity cannot reverse odometry; `raw_encoder_count` applies the configured sign. This is configuration for later adapters, not a hardware connection. No dependencies, ROS repositories or ESP32 repositories were changed for Phase 3.
 
 For alternate local API ports, set `VITE_PROXY_TARGET=http://127.0.0.1:<port>` when launching Vite, and include the UI origin in backend `ALLOWED_ORIGINS`. The defaults and normal run commands above are unchanged.
 

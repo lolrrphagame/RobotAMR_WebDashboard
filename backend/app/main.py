@@ -4,15 +4,22 @@ import os
 import time
 from contextlib import asynccontextmanager, suppress
 from uuid import uuid4
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from pathlib import Path
+from typing import Literal
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Query
+from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError
-from .models import command_adapter
+from .models import command_adapter, ConfigurationCommand, WaypointCommand
+from .configuration import ConfigurationStore, ConfigurationError, ConfigurationConflict
+from .exports import filter_events, csv_export
 from .simulator import RobotSimulator
 
 @asynccontextmanager
 async def lifespan(app):
-    app.state.robot = RobotSimulator()
+    path = os.getenv("ROBOT_CONFIG_PATH", str(Path(__file__).resolve().parents[1] / "data" / "robot-config.json"))
+    store = None if path == ":memory:" else ConfigurationStore(path)
+    app.state.robot = RobotSimulator(store=store)
     async def simulate():
         previous = time.monotonic()
         while True:
@@ -29,7 +36,7 @@ async def lifespan(app):
 
 app = FastAPI(title="PBL4 AMR Simulation API", lifespan=lifespan)
 origins = os.getenv("ALLOWED_ORIGINS", "http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:4173,http://localhost:4173").split(",")
-app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["GET"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["GET", "POST"], allow_headers=["*"])
 
 @app.get("/api/health")
 def health():
@@ -42,6 +49,52 @@ async def status():
 @app.get("/api/map")
 async def map_data():
     return app.state.robot.grid.snapshot()
+
+@app.get("/api/configuration")
+async def configuration():
+    return app.state.robot.configuration.snapshot()
+
+
+def apply_configuration(command):
+    robot = app.state.robot
+    try:
+        robot.command(command, "http-configuration")
+    except ConfigurationError as exc:
+        robot.counters["rejected_commands"] += 1
+        robot.log("error" if "save failed" in str(exc) else "warning", str(exc))
+        raise HTTPException(status_code=409 if isinstance(exc, ConfigurationConflict) else 400, detail=str(exc)) from exc
+    return robot.configuration.snapshot()
+
+
+@app.post("/api/configuration")
+async def update_configuration(command: ConfigurationCommand):
+    return apply_configuration(command)
+
+
+@app.post("/api/waypoints")
+async def update_waypoint(command: WaypointCommand):
+    return apply_configuration(command)
+
+
+@app.get("/api/events")
+async def events(level: Literal["all", "info", "warning", "error"] = "all",
+                 q: str = Query(default="", max_length=200), format: Literal["json", "csv"] = "json"):
+    rows = filter_events(app.state.robot.events, level, q)
+    if format == "csv":
+        return Response(csv_export(rows, ["id", "time", "level", "message"]), media_type="text/csv",
+                        headers={"Content-Disposition": 'attachment; filename="pbl4-events.csv"'})
+    return {"events": rows, "capacity": 60, "timestamp_format": "UTC ISO 8601"}
+
+
+@app.get("/api/diagnostics/history")
+async def history(limit: int = Query(default=600, ge=1, le=600), format: Literal["json", "csv"] = "json"):
+    rows = list(app.state.robot.history)[-limit:]
+    if format == "csv":
+        columns = list(rows[0]) if rows else ["timestamp"]
+        return Response(csv_export(rows, columns), media_type="text/csv",
+                        headers={"Content-Disposition": 'attachment; filename="pbl4-telemetry.csv"'})
+    return {"samples": rows, "capacity": 600, "source": "simulation", "session_id": app.state.robot.session_id}
+
 
 @app.websocket("/ws/telemetry")
 async def telemetry(socket: WebSocket):
@@ -57,18 +110,26 @@ async def telemetry(socket: WebSocket):
                 raw = await socket.receive_text()
                 if len(raw) > 2048:
                     raise ValueError("Command too large")
+                robot.counters["ws_rx_frames"] += 1
                 command = command_adapter.validate_python(json.loads(raw))
                 if not robot.command(command, client):
                     await socket.send_json({"type": "error", "message": "Control is reserved by another client or mode. Cancel autonomous navigation before manual driving."})
                 elif command.type not in ("heartbeat", "control", "release"):
                     await socket.send_json({"type": "ack"})
+            except ConfigurationError as exc:
+                robot.counters["rejected_commands"] += 1
+                robot.log("error" if "save failed" in str(exc) else "warning", str(exc))
+                await socket.send_json({"type": "error", "message": str(exc)[:200]})
             except ValidationError:
+                robot.counters["rejected_commands"] += 1
                 robot.disconnect(client)
                 await socket.send_json({"type": "error", "message": "Invalid control command. Controller commands cleared."})
             except json.JSONDecodeError:
+                robot.counters["rejected_commands"] += 1
                 robot.disconnect(client)
                 await socket.send_json({"type": "error", "message": "Invalid control command. Controller commands cleared."})
             except ValueError as exc:
+                robot.counters["rejected_commands"] += 1
                 robot.disconnect(client)
                 await socket.send_json({"type": "error", "message": str(exc)[:180]})
     async def send():

@@ -1760,7 +1760,365 @@ h1 {
   }
 }
 @media (max-width: 1000px) {
-  .navigation-main { display: contents; }
-  .navigation-side { order: 1; }
-  .nav-events { order: 2; }
+  .navigation-main {
+    display: contents;
+  }
+  .navigation-side {
+    order: 1;
+  }
+  .nav-events {
+    order: 2;
+  }
+}
+/* Phase 3: configuration and diagnostics share the mission-control visual language. */
+.home-configuration {
+  margin-bottom: 0;
+}
+.home-configuration .nav-body > .muted {
+  font-size: 12px;
+  margin-top: 10px;
+}
+.saved-home {
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  color: #f2cf86;
+  letter-spacing: -0.02em;
+}
+.home-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 17px;
+}
+.home-actions button,
+.export-button {
+  border: 1px solid #31526a;
+  background: #173448;
+  color: #a3dfed;
+  border-radius: 7px;
+  padding: 11px 13px;
+  font-size: 13px;
+}
+.home-actions button:hover,
+.export-button:hover {
+  background: #1c4359;
+}
+.home-locked,
+.export-error {
+  font-size: 12px;
+  line-height: 1.8;
+  color: #edba75;
+  margin-top: 13px;
+}
+.export-error {
+  padding: 13px 18px;
+  border: 1px solid #705236;
+  border-radius: 7px;
+  background: #2b251e;
+}
+.diagnostics-page {
+  padding-bottom: 26px;
+}
+.diagnostics-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 2px 0 20px;
+}
+.freshness {
+  font-size: 13px;
+  color: #99bfd0;
+  margin-top: 8px;
+  line-height: 1.8;
+}
+.diagnostic-timestamp {
+  font-size: 12px;
+  color: #7392af;
+  margin-top: 5px;
+}
+.export-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  white-space: nowrap;
+}
+.diagnostics-tabs {
+  display: flex;
+  gap: 5px;
+  border-bottom: 1px solid #2a3d55;
+  margin-bottom: 20px;
+  overflow-x: auto;
+}
+.diagnostics-tabs button {
+  padding: 14px 19px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: #8da8c3;
+  background: transparent;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.diagnostics-tabs button[aria-selected="true"] {
+  color: #51d7e7;
+  border-bottom-color: #42d4e6;
+  background: #11304355;
+}
+.diagnostics-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.diagnostics-notice {
+  border: 1px solid #244358;
+  background: #102639;
+  color: #8eb6cc;
+  padding: 13px 17px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.motor-diagnostics-grid,
+.system-history-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  min-width: 0;
+}
+.motor-rpm {
+  display: flex;
+  gap: 30px;
+  margin: 24px 22px;
+}
+.motor-rpm > div {
+  flex: 1;
+}
+.motor-rpm span {
+  display: block;
+  font-size: 12px;
+  color: #86a2bf;
+  margin-bottom: 8px;
+}
+.motor-rpm strong {
+  font-size: 34px;
+  font-weight: 500;
+  color: #d5f2fc;
+  font-variant-numeric: tabular-nums;
+}
+.motor-rpm > div + div strong {
+  color: #94acc8;
+}
+.diagnostic-values {
+  margin: 0;
+  padding: 0 22px 10px;
+}
+.diagnostic-values > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+  border-top: 1px solid #23364b;
+  padding: 13px 0;
+  font-size: 13px;
+  color: #8fa9c5;
+}
+.diagnostic-values dd {
+  color: #cce0f4;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.diagnostic-table-wrap {
+  overflow-x: auto;
+  margin: 18px 0 0;
+}
+.diagnostic-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 13px;
+}
+.diagnostic-table th {
+  color: #7c9ab9;
+  background: #0d1a2b;
+  font-weight: 500;
+  font-size: 12px;
+  padding: 13px 21px;
+  white-space: nowrap;
+}
+.diagnostic-table td {
+  color: #b6cce3;
+  padding: 15px 21px;
+  border-top: 1px solid #21334a;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.6;
+}
+.diagnostic-table td.unavailable {
+  color: #6e87a5;
+  font-size: 12px;
+}
+.diagnostic-state-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 22px;
+  padding: 20px 22px;
+  border-top: 1px solid #23364c;
+  margin-top: 17px;
+  color: #859fbd;
+  font-size: 12px;
+}
+.diagnostic-state-row strong {
+  display: block;
+  color: #b8e0ec;
+  margin-top: 7px;
+  font-size: 14px;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+.diagnostic-footnote {
+  font-size: 12px;
+  color: #7f9ab7;
+  line-height: 1.9;
+  padding: 15px 21px;
+}
+.health-history-chart {
+  height: 230px;
+  padding: 5px 8px 8px;
+}
+.event-toolbar {
+  display: flex;
+  gap: 15px;
+  align-items: end;
+  flex-wrap: wrap;
+  padding: 20px 21px 0;
+}
+.event-toolbar label {
+  font-size: 12px;
+  color: #8da8c6;
+}
+.event-toolbar input,
+.event-toolbar select {
+  display: block;
+  background: #0b192a;
+  border: 1px solid #304861;
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-top: 8px;
+  color: #c0d8ed;
+  font-size: 14px;
+  min-height: 42px;
+}
+.event-toolbar input {
+  width: 100%;
+  min-width: 150px;
+}
+.event-search {
+  flex: 1;
+}
+.event-search > span {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.event-toolbar select {
+  padding-right: 24px;
+}
+.events-table td:first-child {
+  min-width: 205px;
+  font-size: 12px;
+  color: #8ba7c4;
+}
+.events-table td:last-child {
+  min-width: 240px;
+}
+.event-severity {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  background: #12313d;
+  border: 1px solid #275264;
+  color: #5fc7df;
+  padding: 5px 7px;
+  border-radius: 4px;
+}
+.event-severity.warning {
+  background: #34291c;
+  border-color: #6b4c2b;
+  color: #e8b675;
+}
+.event-severity.error {
+  background: #3b202b;
+  border-color: #754052;
+  color: #ed92a7;
+}
+.empty-events {
+  padding: 35px 20px;
+  color: #7794b2;
+  font-size: 14px;
+  text-align: center;
+}
+.advanced-events .export-error {
+  margin-inline: 21px;
+}
+@media (max-width: 1100px) {
+  .diagnostics-top {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .diagnostic-table th,
+  .diagnostic-table td {
+    padding: 13px 16px;
+  }
+  .motor-rpm {
+    gap: 15px;
+  }
+  .motor-rpm strong {
+    font-size: 29px;
+  }
+  .motor-diagnostics-grid {
+    gap: 15px;
+  }
+  .diagnostic-values > div {
+    font-size: 12px;
+  }
+}
+@media (max-width: 760px) {
+  .motor-diagnostics-grid,
+  .system-history-grid {
+    grid-template-columns: 1fr;
+  }
+  .diagnostics-tabs button {
+    font-size: 13px;
+    padding: 13px 14px;
+  }
+  .event-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .event-toolbar input,
+  .event-toolbar select {
+    width: 100%;
+  }
+  .export-button {
+    white-space: normal;
+  }
+  .diagnostic-values > div {
+    font-size: 13px;
+  }
+  .diagnostic-state-row {
+    gap: 20px;
+  }
+  .health-history-chart {
+    height: 210px;
+  }
+  .freshness {
+    font-size: 12px;
+  }
+  .diagnostic-timestamp {
+    font-size: 11px;
+  }
+  .home-configuration .panel-heading {
+    flex-wrap: wrap;
+  }
+  .saved-home {
+    font-size: 17px;
+  }
 }

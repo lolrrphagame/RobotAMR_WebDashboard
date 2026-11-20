@@ -33,12 +33,14 @@ class DifferentialDrive:
     def __init__(self, config: DriveConfig | None = None):
         self.config = config or DriveConfig()
 
+    def unlimited(self, linear: float, angular: float) -> list[float]:
+        c = self.config
+        return [(linear + sign * angular * c.wheel_separation / 2)
+               * 60 / (2 * math.pi * c.wheel_radius) for sign in (-1, 1)]
     def inverse(self, linear: float, angular: float) -> list[float]:
         """Body twist -> wheel RPM; proportional saturation preserves curvature."""
-        c = self.config
-        rpm = [(linear + sign * angular * c.wheel_separation / 2)
-               * 60 / (2 * math.pi * c.wheel_radius) for sign in (-1, 1)]
-        scale = max(1.0, max(abs(r) for r in rpm) / c.max_rpm)
+        rpm = self.unlimited(linear, angular)
+        scale = max(1.0, max(abs(r) for r in rpm) / self.config.max_rpm)
         return [r / scale for r in rpm]
 
     def forward(self, rpm: list[float]) -> tuple[float, float]:

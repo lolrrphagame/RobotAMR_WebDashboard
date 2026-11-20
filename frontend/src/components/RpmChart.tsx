@@ -11,9 +11,11 @@ import type { Sample } from "../types";
 export function RpmChart({
   history,
   motor,
+  windowLabel = "Last 15 seconds",
 }: {
   history: Sample[];
   motor: "left" | "right";
+  windowLabel?: string;
 }) {
   const color = motor === "left" ? "#25d9e8" : "#8d9bff";
   return (
@@ -36,7 +38,7 @@ export function RpmChart({
           <i className="dashed" />
           Target RPM
         </span>
-        <span className="ml-auto text-slate-400">Last 15 seconds</span>
+        <span className="ml-auto text-slate-400">{windowLabel}</span>
       </div>
       <div className="chart">
         <ResponsiveContainer width="100%" height="100%">

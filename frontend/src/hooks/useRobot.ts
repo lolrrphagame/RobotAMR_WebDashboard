@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Command, Sample, Telemetry } from "../types";
+import {
+  frameToSample,
+  historyToSample,
+  mergeHistory,
+} from "../utils/telemetry";
+import type { HistoryRecord, Command, Sample, Telemetry } from "../types";
 
 export function useRobot() {
   const [data, setData] = useState<Telemetry | null>(null);
@@ -8,7 +13,9 @@ export function useRobot() {
     "connecting" | "connected" | "disconnected"
   >("connecting");
   const [error, setError] = useState("");
+  const [historyError, setHistoryError] = useState("");
   const socket = useRef<WebSocket | null>(null);
+  const session = useRef<string | null>(null);
   const command = useRef<Command>({ type: "stop" });
   const send = useCallback((next: Command) => {
     if (
@@ -36,6 +43,39 @@ export function useRobot() {
       ws.onopen = () => {
         lastMessage = Date.now();
         setError("");
+        fetch("/api/diagnostics/history")
+          .then(async (response) => {
+            if (!response.ok)
+              throw Error(
+                "Historical data unavailable; showing samples received in this browser.",
+              );
+            const body = (await response.json()) as {
+              samples: HistoryRecord[];
+              session_id: string;
+            };
+            if (
+              !disposed &&
+              socket.current === ws &&
+              ws.readyState === WebSocket.OPEN
+            ) {
+              const changed =
+                session.current !== null && session.current !== body.session_id;
+              session.current = body.session_id;
+              setHistory((old) =>
+                mergeHistory(
+                  changed ? [] : old,
+                  body.samples.map(historyToSample),
+                ),
+              );
+              setHistoryError("");
+            }
+          })
+          .catch(() => {
+            if (!disposed)
+              setHistoryError(
+                "Historical data unavailable; showing samples received in this browser.",
+              );
+          });
       };
       ws.onmessage = (event) => {
         try {
@@ -60,16 +100,12 @@ export function useRobot() {
           lastMessage = Date.now();
           setConnection("connected");
           setData(next);
-          setHistory((old) => [
-            ...old.slice(-149),
-            {
-              time: new Date(next.timestamp).toLocaleTimeString(),
-              leftTarget: next.motors[0].target_rpm,
-              leftActual: next.motors[0].actual_rpm,
-              rightTarget: next.motors[1].target_rpm,
-              rightActual: next.motors[1].actual_rpm,
-            },
-          ]);
+          const changed =
+            session.current !== null && session.current !== next.session_id;
+          session.current = next.session_id;
+          setHistory((old) =>
+            mergeHistory(changed ? [] : old, [frameToSample(next)]),
+          );
         } catch {
           setError("Invalid telemetry received. Reconnecting safely.");
           stop();
@@ -118,5 +154,14 @@ export function useRobot() {
       document.removeEventListener("visibilitychange", hidden);
     };
   }, [stop, release]);
-  return { data, history, connection, error, send, stop, release };
+  return {
+    data,
+    history,
+    connection,
+    error,
+    historyError,
+    send,
+    stop,
+    release,
+  };
 }
