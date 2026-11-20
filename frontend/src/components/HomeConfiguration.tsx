@@ -1,15 +1,18 @@
 import { Home } from "lucide-react";
 import type { Command, Goal, Telemetry } from "../types";
 export function HomeConfiguration({
+  readOnly = false,
   data,
   selected,
   send,
 }: {
+  readOnly?: boolean;
   data: Telemetry | null;
   selected?: Goal | null;
   send: (command: Command) => void;
 }) {
   const locked =
+    readOnly ||
     !data ||
     !!data.operations.active ||
     ["running", "paused"].includes(data.navigation.status);

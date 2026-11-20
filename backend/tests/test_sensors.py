@@ -136,6 +136,7 @@ def test_sensor_failure_does_not_disable_stop_navigation_or_collision_guard(monk
     robot.command(ControlCommand(type='stop'),'observer')
     assert robot.rpm == robot.targets() == [0,0]
     assert robot.mission.status == 'idle'
+    robot.command(ControlCommand(type='release'),'owner')
     for _ in range(200):
         robot.command(ControlCommand(type='control',linear=.6),'owner');robot.tick(.1)
         assert robot.grid.free(*robot.state.pose[:2])

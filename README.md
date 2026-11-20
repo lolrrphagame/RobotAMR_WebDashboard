@@ -1,6 +1,104 @@
-# PBL4 AMR Mission Control — Phase 4B
+# PBL4 AMR Mission Control — Phase 5A
 
 A simulation-only industrial robot dashboard built with React, TypeScript, Vite, Tailwind CSS, Recharts and FastAPI. No ROS, serial, GPIO, camera or motor interfaces are imported or opened. All controls, encoder readings and health values are simulated.
+
+## Phase 5A security and reliability
+
+See **[PHASE5A_AUDIT.md](PHASE5A_AUDIT.md)** for severity-ranked findings and remaining deployment gaps. This remains a simulator, with no active ROS/serial/camera/hardware adapter.
+
+### Local development (default)
+
+The existing two-terminal run commands below remain valid. `APP_MODE=local` permits control **only when both the peer and Host are loopback**. Default hosts are localhost/127.0.0.1 (plus the test-only `testserver` name). A non-loopback peer or LAN Host is rejected, even if Uvicorn is accidentally bound to all interfaces. Do not forward a public/LAN reverse proxy to local mode or rewrite remote traffic to appear local. Vite development/preview must stay on 127.0.0.1. This local bypass trusts programs on your own workstation; it is not an account login.
+
+### Explicit LAN operator sessions
+
+LAN mode is opt-in and requires **HTTPS/WSS**, explicit origins and hosts, and an operator password hash. Anonymous observers may read monitoring data on this explicitly enabled private LAN service; **all HTTP mutations and control WebSocket messages require the shared operator login**. This design protects control/configuration, not monitoring-data confidentiality. If anonymous observation is unacceptable, restrict the entire site at the TLS proxy as a Phase 5B deployment policy.
+
+Generate a password hash interactively, outside the repository (no password appears in shell arguments):
+
+```bash
+mkdir -p ~/.config/pbl4
+chmod 700 ~/.config/pbl4
+cd ~/Projects/PBL4_Dashboard/backend
+(umask 077; env -u PYTHONPATH .venv/bin/python -m app.security > ~/.config/pbl4/operator.env)
+```
+
+Then edit that private file to add, using your actual TLS hostname:
+
+```dotenv
+APP_MODE=lan
+ALLOWED_HOSTS=robot.example.lan
+ALLOWED_ORIGINS=https://robot.example.lan
+# OPERATOR_PASSWORD_HASH=<the generated salt:scrypt-hash line already in this file>
+```
+
+Do not place this file in the frontend, commit it, paste credentials into URLs, or use a VITE-prefixed variable for credentials. LAN startup fails closed if required configuration is missing or origins are not explicit HTTPS origins. The operator secret is a salted scrypt hash; sessions are random opaque IDs, stored server-side in memory (max 128), expire after eight hours, and disappear on restart. Cookies are Secure, HttpOnly, SameSite=Strict and scoped to `/`. Login rotates the session identifier. Logout revokes the current session; its control sockets close and release/pause owned motion. Another authenticated operator tab can issue STOP even if it does not own motion.
+
+Launch behind a **trusted loopback TLS reverse proxy**, not a directly exposed backend:
+
+```bash
+cd ~/Projects/PBL4_Dashboard/backend
+env -u PYTHONPATH .venv/bin/python -m uvicorn app.main:app \
+  --env-file ~/.config/pbl4/operator.env --host 127.0.0.1 --port 8000 \
+  --proxy-headers --forwarded-allow-ips 127.0.0.1 \
+  --ws-max-size 4096 --ws-ping-interval 20 --ws-ping-timeout 20
+```
+
+Phase 5B must serve `frontend/dist` and proxy `/api` and `/ws` under the same HTTPS origin, preserve the original Host/Origin, set forwarded scheme/client headers itself, and support WebSocket upgrades. Trust forwarded headers only from that proxy; never use `--forwarded-allow-ips '*'`. TLS/proxy installation is not performed by this phase. Direct HTTP LAN requests are rejected. Vite is a development server, not the LAN production server.
+
+HTTP mutation requests need an allowed Origin and `X-CSRF-Token`, obtained from `GET /api/auth/session` after login. The frontend keeps CSRF state only in memory and sends the HttpOnly cookie automatically. WebSockets validate Origin and authenticate the cookie; observers cannot promote an existing socket to a controller (login reload creates a new connection). Missing/malformed commands are rejected without changing an existing owner's mission. Expired/revoked sessions close control sockets. Native LAN WebSocket clients must also send an allowed Origin.
+
+### Configuration and limits
+
+| Variable | Default / requirement |
+| --- | --- |
+| `APP_MODE` | `local`; `lan` explicitly enables authenticated HTTPS deployment |
+| `ALLOWED_HOSTS` | Loopback/test defaults locally; explicit comma-separated DNS/IP hostnames in LAN mode, no wildcard |
+| `ALLOWED_ORIGINS` | Local Vite origins; explicit HTTPS origins in LAN mode |
+| `OPERATOR_PASSWORD_HASH` | Private salted scrypt hash, required only for LAN |
+| `ROBOT_CONFIG_PATH` | Existing JSON configuration path (unchanged) |
+| `MISSION_DB_PATH` | Existing SQLite path (unchanged) |
+| `VITE_PROXY_TARGET` | Development API proxy target only; never credentials |
+
+Mutation bodies are limited to **32 KiB**, including chunked requests. Control frames are limited to **2048 UTF-8 bytes**; run Uvicorn with the transport size flag above to reject oversized frames before allocating a full message. Limits are 120 HTTP mutations/minute per peer, five login attempts/minute per peer, 40 control messages/second per socket, 64 simultaneous WebSockets, 128 sessions and 1024 rate buckets. Authenticated STOP bypasses the message-rate counter (not authentication). A proxy may make all clients share an IP bucket; configure client forwarding correctly. These are process-local safeguards, not distributed abuse protection.
+
+### Safety fixes
+
+STOP now inhibits replay from the previous owner's held manual input until release or disconnect; a broadcast stop generation also clears browser command heartbeats. Reconnect starts with no pending command. Invalid JSON/schema/business commands do not pause a valid mission. Watchdogs remain armed and still stop/pause stale owners. Observer sockets cannot send controls. Persistence faults halt motion and prevent operations restart until storage is repaired and the backend restarted; failure to save a terminal record is logged, not presented as durable success.
+
+Shutdown always halts the simulated plant, joins the physics task, records interruption when possible and closes SQLite, including exception paths. WAL uses a five-second busy timeout and a passive shutdown checkpoint. Schema version **1** adopts existing version-0 tables in place (index + user_version only), preserves history/definitions/configuration, and rejects unknown future schema versions. No saved developer data is reset by tests.
+
+### Backup and restore (non-destructive)
+
+For a coherent SQLite + Home/waypoint snapshot, stop the backend first. The backup command also uses SQLite's online backup API, so a live WAL database is copied consistently (not by copying just its main file). Destination must be a **new directory**:
+
+```bash
+cd ~/Projects/PBL4_Dashboard/backend
+env -u PYTHONPATH .venv/bin/python -m app.backup ~/pbl4-backup-2026-11-21
+```
+
+Custom `MISSION_DB_PATH` / `ROBOT_CONFIG_PATH` are honored. Backups contain `missions.sqlite3`, the JSON config if present, and a manifest. Verify the backup with Python's `sqlite3` `PRAGMA integrity_check` before trusting it.
+
+Restore without overwriting original data: stop the backend, copy the backup to a new recovery directory, and start with paths pointing there:
+
+```bash
+cp -a ~/pbl4-backup-2026-11-21 ~/pbl4-recovery-2026-11-21
+cd ~/Projects/PBL4_Dashboard/backend
+env -u PYTHONPATH \
+  MISSION_DB_PATH="$HOME/pbl4-recovery-2026-11-21/missions.sqlite3" \
+  ROBOT_CONFIG_PATH="$HOME/pbl4-recovery-2026-11-21/robot-config.json" \
+  .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+Keep the original directory intact. Startup marks unfinished restored runs interrupted and requires explicit operator action; it never resumes motion. If no JSON existed in the backup, default Home is used. Keep private credential files separate from data backups.
+
+### Performance and future adapters
+
+Heavy pages are lazy-loaded, with a shared chart chunk. Telemetry observers share a cached preparation per physics update/transition; sensors still retain one 5 Hz scan. Browser/history, connection, session and rate buffers stay bounded. SQLite restart recovery queries only active records through a status index. Historical analytics still scan terminal JSON records and need SQL aggregation/pagination for a large archive.
+
+Measure on the actual Pi 4: record browser Network WebSocket bytes/second, tab performance/memory over a long session, backend CPU/RSS using existing OS monitoring tools, and SQLite latency with a copied database. Compare one operator to several observers, exercising LiDAR, charts and WAIT/navigation missions. No Pi-specific throughput, CPU or latency claims are made here.
+
+Future adapters must supply validated, explicitly sourced telemetry while respecting the existing command ownership, STOP, watchdog and collision interfaces. `/cmd_vel`, `/odom`, `/scan`, `/tf`, camera streaming, ESP32 diagnostic fields and UART 57600 remain documented contracts only. The simulator remains the **sole active plant/data source**. Phase 5B prerequisites: trusted TLS/static hosting, secret provisioning, single-process service supervision, backup/restore drill, LAN browser/session tests and Pi resource measurements. Do not enable hardware as part of deployment.
 
 ## Requirements
 
@@ -208,7 +306,7 @@ Mission definitions and records are stored in **`backend/data/missions.sqlite3`*
 
 The `definitions` table stores pending queue order and templates. The `executions` table stores each unique execution ID and original mission ID, name, creation/start/finish timestamps, ordered resolved step definitions and results, completed steps, progress, start/end poses, active simulation duration, estimated center-path distance, completed waypoint visits and reasons. Queue removal and execution creation are committed together. Transitions and step results are persisted immediately; active runs checkpoint roughly once per simulated second.
 
-On startup, unfinished running/paused records become **interrupted**. Valid pending definitions and templates are restored, but live execution state, owner and motion are not. Invalid restored definitions are omitted with warning events. Normal shutdown records interruption; an abrupt crash may lose up to the last checkpoint of duration/distance/pose. No mission auto-resumes or auto-starts after restart. Use **one backend worker/process** per database and configuration file. Back up the SQLite database using SQLite-aware tooling, including WAL state; schema migration and retention tooling are not implemented yet.
+On startup, unfinished running/paused records become **interrupted**. Valid pending definitions and templates are restored, but live execution state, owner and motion are not. Invalid restored definitions are omitted with warning events. Normal shutdown records interruption; an abrupt crash may lose up to the last checkpoint of duration/distance/pose. No mission auto-resumes or auto-starts after restart. Use **one backend worker/process** per database and configuration file. Back up the SQLite database using SQLite-aware tooling, including WAL state; Phase 5A adds compatible version-0 adoption to version 1; general migration and retention tooling remain future work.
 
 ### History and analytics
 
@@ -243,7 +341,7 @@ Execution messages (acknowledged by the existing control stream):
 {"type":"operations","action":"cancel"}
 ```
 
-Definitions can be managed by multiple clients; mutation/physics actions execute serially on the single backend event loop, and queue-order updates must match the current queue. Ownership is assigned only by an explicit WebSocket execution command. These remain local-development APIs without user authentication. Python API tests use temporary databases; browser tests use `MISSION_DB_PATH=:memory:` and never edit the developer's mission database.
+Definitions can be managed by multiple clients; mutation/physics actions execute serially on the single backend event loop, and queue-order updates must match the current queue. Ownership is assigned only by an explicit WebSocket execution command. These APIs now follow the Phase 5A session/CSRF rules for LAN mutation and control. Python API tests use temporary databases; browser tests use `MISSION_DB_PATH=:memory:` and never edit the developer's mission database.
 
 Implementation: `backend/app/operations.py` contains validated step/definition models, `DefinitionStore` SQLite persistence and the `Operations` queue/execution/history/analytics coordinator. Existing simulator/main/telemetry modules integrate it. `frontend/src/components/MissionsPage.tsx` exports reusable MissionOverview, MissionBuilder, MissionQueue, ActiveMission, MissionHistory and MissionAnalytics components. Operational events are emitted on transitions, not each tick.
 
@@ -283,7 +381,7 @@ All motion command handling remains in memory; only Home and waypoint configurat
 - Home clearance is validated when creating the simulator. HTTP/WebSocket telemetry includes `clearance.pose_clear` and `clearance.radius`; **Diagnostics** shows current pose clearance. Error messages distinguish an obstructed robot pose from an invalid destination.
 - A stale telemetry stream is closed after approximately two seconds; reconnection starts with no pending drive command.
 - The input envelope accepts ±0.6 m/s and ±2.0 rad/s, then **proportionally scales both wheel targets** to enforce ±40 RPM even for combined linear/angular commands. This preserves commanded curvature. The maximum straight speed is about **0.1822 m/s**; UI sliders use 0.02–0.18 m/s and 0.2–1.2 rad/s. Non-finite values, unknown commands and extra fields are rejected.
-- One WebSocket client can own motion at a time. Other clients can observe; any connected client may issue STOP. This is a local development simulator without authentication, not a hardware safety system.
+- One WebSocket client can own motion at a time. Other clients can observe; any connected client may issue STOP. This is a simulation application with Phase 5A LAN operator authorization, not a hardware safety system.
 
 ## HTTP and WebSocket API
 
@@ -368,9 +466,9 @@ Geometry: wheel radius **0.0435 m**, separation **0.300 m**, encoder resolution 
 
 The frontend never integrates robot pose or creates a second simulation. HTTP and WebSocket serialize the same backend state. The API and UI are independent of the plant implementation. A later phase can introduce an explicit robot adapter implementing the simulator's command, stop, disconnect, tick and snapshot contract, with an rclpy bridge behind it. That future phase must define its hardware command ownership, watchdog and authentication separately. No hardware integration is included here.
 
-## Phase 4B verification and limits
+## Phase 5A verification and limits
 
-Verified: **117 backend tests**, **14 browser integration tests**, and the frontend production build pass. The build reports a non-blocking large-chunk warning; the backend test dependency reports an AnyIO deprecation warning.
+Verified: **127 backend tests**, **15 browser integration tests**, and the frontend production build pass. Pages/charts are split into separate build chunks; the backend test dependency still reports an AnyIO deprecation warning.
 
 Audit regressions cover manual versus autonomous collisions, warning deduplication, held-input inhibition, STOP/cancel after blocking, idle state cleanup, footprint boundary/corner clearance, continuous grazing-corner collision detection, the observed dashboard pose clearance, exact A/B/C sequence visits and return home, independent wheel encoder integration, and odometry invariance under raw encoder polarity changes. Phase 3 adds Home/current-pose/reset validation and persistence, no-teleport checks, configured Return Home, waypoint heading restore/overwrite/delete/sequence, corrupt-file fallback, failed-write rollback, diagnostics calculations, unavailable PI/UART data, bounded history, filtering/CSV escaping, STOP/disconnect status and stable session/sample timestamps. Automated backend tests also cover forward/inverse kinematics, combined-command RPM saturation, smooth wheel ramps, forward/reverse/arc/spin integration, encoder polarity, waypoint management, full sequence execution, obstacle detours, unreachable destinations, final yaw, return home, mission progress, command arbitration, pause/resume, STOP, collision guarding, disconnect and lease expiry. Phase 4B tests definitions, capacity/order, multi-step A/B/C/Home execution, WAIT, pause/resume, STOP, disconnect/lease expiry, collision/unreachable paths, no automatic queue advancement, SQLite recovery, history and analytics; browser coverage includes creation/templates, explicit execution, confirmation, history filtering/CSV and mobile layout. Phase 4A adds deterministic ray distances, translation/rotation, boundary/unknown/corner/max-range behavior, no-return classification, sensor scheduling/payload budgets, pose immutability, disconnected camera, read-only sensor transport and fault isolation. Browser tests exercise real UI/WebSocket integration, polar/overlay rendering, stale/disconnected/invalid sensor states, mission continuity during sensor outages and responsive layouts.
 

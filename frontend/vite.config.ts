@@ -9,6 +9,13 @@ export default defineConfig(({ mode }) => {
     "/ws": { target: target.replace(/^http/, "ws"), ws: true },
   };
   return {
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: { charts: ["recharts"], react: ["react", "react-dom"] },
+        },
+      },
+    },
     plugins: [react(), tailwindcss()],
     server: { proxy },
     preview: { proxy },

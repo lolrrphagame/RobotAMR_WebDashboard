@@ -52,12 +52,17 @@ class OperationsCommand(StrictModel):
 class DefinitionStore:
     def __init__(self,path=':memory:'):
         if path!=':memory:': Path(path).parent.mkdir(parents=True,exist_ok=True)
-        self.db=sqlite3.connect(str(path))
+        self.db=sqlite3.connect(str(path),timeout=5)
+        self.db.execute('PRAGMA busy_timeout=5000')
+        version=self.db.execute('PRAGMA user_version').fetchone()[0]
+        if version>1:self.db.close();raise ValueError('Unsupported future mission database version; no migration applied')
         self.db.execute('PRAGMA journal_mode=WAL')
         self.db.execute('CREATE TABLE IF NOT EXISTS definitions (id TEXT PRIMARY KEY, kind TEXT, position INTEGER, body TEXT)')
         self.db.execute('CREATE TABLE IF NOT EXISTS executions (id TEXT PRIMARY KEY, status TEXT, body TEXT)')
+        self.db.execute('CREATE INDEX IF NOT EXISTS executions_status ON executions(status)')
+        self.db.execute('PRAGMA user_version=1')
         # Live ownership is never restored. Unfinished runs become terminal records.
-        for run in self.records():
+        for run in self.records(active_only=True):
             if run['status'] in ('running','paused'):
                 for step in run['steps']:
                     if step['status']=='running':step.update(status='interrupted',finished_at=utc())
@@ -76,15 +81,18 @@ class DefinitionStore:
         with self.db:
             self.db.execute('INSERT OR REPLACE INTO executions VALUES (?,?,?)',(run['id'],run['status'],json.dumps(run)))
 
-    def records(self):
-        return [json.loads(row[0]) for row in self.db.execute('SELECT body FROM executions ORDER BY rowid DESC')]
+    def records(self,active_only=False):
+        query="SELECT body FROM executions" + (" WHERE status IN ('running','paused')" if active_only else '') + " ORDER BY rowid DESC"
+        return [json.loads(row[0]) for row in self.db.execute(query)]
 
-    def close(self): self.db.close()
+    def close(self):
+        try:self.db.execute('PRAGMA wal_checkpoint(PASSIVE)')
+        finally:self.db.close()
 
 
 class Operations:
     def __init__(self,robot,store=None):
-        self.robot=robot;self.store=store or DefinitionStore();self.current=None
+        self.robot=robot;self.store=store or DefinitionStore();self.current=None;self.persistence_fault=False
         self.queue=[];self.templates=[];self.checkpoint=0
         for kind in ('queue','template'):
             valid=[]
@@ -138,6 +146,7 @@ class Operations:
 
     def start(self,client):
         r=self.robot
+        if self.persistence_fault:raise ValueError('Storage fault; repair storage and restart')
         if self.active or r.owner is not None or r.mission.active: raise ValueError('Robot motion is already reserved; cancel or release it first')
         if not self.queue: raise ValueError('Queue is empty')
         item=self.queue[0];definition=MissionDefinition.model_validate(item['definition']);self.validate(definition)
@@ -168,6 +177,7 @@ class Operations:
 
     def resume(self,client):
         r=self.robot
+        if self.persistence_fault:raise ValueError('Storage fault; repair storage and restart')
         if not self.current or self.current['status']!='paused':raise ValueError('No paused operations mission')
         if r.owner not in (None,client):raise ValueError('Another operator owns this mission')
         if r.mission.status=='paused':r.mission.replan_remaining(r.state.pose)
@@ -180,7 +190,12 @@ class Operations:
         if run['step_started'] and run['current_step']<len(run['steps']):run['steps'][run['current_step']]['status']=status
         run.update(status=status,reason=reason,finished_at=utc(),end_pose=list(r.state.pose))
         if status=='completed':run['progress']=100
-        r.halt();r.owner=None;r.mission.reset(reason);self.store.save_run(run)
+        r.halt();r.owner=None;r.mission.reset(reason)
+        try:self.store.save_run(run)
+        except sqlite3.Error:
+            self.persistence_fault=True
+            r.log('error','Mission result could not be saved; motion halted. Repair storage and restart.')
+        finally:self.current=None
         r.log('info' if status=='completed' else 'warning',f"Mission {status}: {run['name']} · {reason}")
         self.current=None
 
@@ -215,7 +230,7 @@ class Operations:
             if run['wait_remaining']<=1e-9:self.complete_step()
 
     def after_tick(self,dt,previous_pose):
-        if not self.current:return
+        if not self.current or self.persistence_fault:return
         if self.current['status']=='running':
             self.current['end_pose']=list(self.robot.state.pose)
             if self.current['step_started']:

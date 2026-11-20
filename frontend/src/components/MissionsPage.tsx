@@ -592,6 +592,10 @@ export function MissionsPage({
     };
   }, [version, status, query]);
   const action = async (url: string, method: string, body?: unknown) => {
+    if (!connected) {
+      setError("Operator authentication and connection required");
+      return;
+    }
     try {
       const r = await fetch(url, {
         method,
@@ -632,7 +636,9 @@ export function MissionsPage({
         connected={connected && !loadError}
       />
       <div className="mission-columns">
-        <MissionBuilder create={create} />
+        <fieldset disabled={!connected}>
+          <MissionBuilder create={create} />
+        </fieldset>
         {state && (
           <MissionQueue
             state={state}

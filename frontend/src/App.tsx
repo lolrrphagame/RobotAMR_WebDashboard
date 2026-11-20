@@ -1,3 +1,4 @@
+import { Suspense, lazy, useState } from "react";
 import {
   Activity,
   Battery,
@@ -20,17 +21,32 @@ import {
   Wifi,
   Zap,
 } from "lucide-react";
-import { MissionsPage } from "./components/MissionsPage";
-import { useState } from "react";
-import { DiagnosticsPage } from "./components/DiagnosticsPage";
+const MissionsPage = lazy(() =>
+  import("./components/MissionsPage").then((m) => ({
+    default: m.MissionsPage,
+  })),
+);
+import { OperatorSession } from "./components/OperatorSession";
+
+const DiagnosticsPage = lazy(() =>
+  import("./components/DiagnosticsPage").then((m) => ({
+    default: m.DiagnosticsPage,
+  })),
+);
 import { HomeConfiguration } from "./components/HomeConfiguration";
 import { formatTimestamp } from "./utils/telemetry";
-import { NavigationPage } from "./components/NavigationPage";
+const NavigationPage = lazy(() =>
+  import("./components/NavigationPage").then((m) => ({
+    default: m.NavigationPage,
+  })),
+);
 import { MissionSummary } from "./components/MissionSummary";
 import { ManualControl } from "./components/ManualControl";
 import { RpmChart } from "./components/RpmChart";
 import { useSensors } from "./hooks/useSensors";
-import { SensorsPage } from "./components/SensorsPage";
+const SensorsPage = lazy(() =>
+  import("./components/SensorsPage").then((m) => ({ default: m.SensorsPage })),
+);
 import { useRobot } from "./hooks/useRobot";
 const pages = [
   { name: "Overview", icon: LayoutDashboard },
@@ -44,6 +60,7 @@ const pages = [
 function App() {
   const [page, setPage] = useState("Overview");
   const {
+    operator,
     data,
     history,
     connection,
@@ -164,301 +181,314 @@ function App() {
               </span>
             </div>
           )}
-          {(page === "Overview" || page === "Manual Control") && (
-            <>
-              <MissionSummary data={live} />
-              {live?.mode === "AUTONOMOUS" && (
-                <div className="simulation-banner">
-                  Autonomous mode owns motion. Cancel the mission on Navigation
-                  or press STOP before manual driving.{" "}
-                  <button className="navigation-stop" onClick={stop}>
-                    STOP
-                  </button>
+          <OperatorSession operator={operator} />
+          <Suspense fallback={<p role="status">Loading view…</p>}>
+            {(page === "Overview" || page === "Manual Control") && (
+              <>
+                <MissionSummary data={live} />
+                {live?.mode === "AUTONOMOUS" && (
+                  <div className="simulation-banner">
+                    Autonomous mode owns motion. Cancel the mission on
+                    Navigation or press STOP before manual driving.{" "}
+                    <button className="navigation-stop" onClick={stop}>
+                      STOP
+                    </button>
+                  </div>
+                )}
+                <div className="telemetry-grid">
+                  <article className="metric panel">
+                    <div className="metric-label">
+                      Robot status <Wifi size={19} />
+                    </div>
+                    <div className="metric-value status-value">
+                      {connected ? (
+                        <>
+                          <span className="status-dot" />
+                          Online
+                        </>
+                      ) : (
+                        "Offline"
+                      )}
+                    </div>
+                    <div className="metric-footer">
+                      <span data-testid="operating-mode">
+                        {live?.mode ?? "AWAITING CONNECTION"}
+                      </span>
+                      <span>SIMULATED</span>
+                    </div>
+                  </article>
+                  <article className="metric panel">
+                    <div className="metric-label">
+                      Linear velocity <Gauge size={19} />
+                    </div>
+                    <div className="metric-value">
+                      {value(live?.linear_velocity)}
+                      <small>m/s</small>
+                    </div>
+                    <div className="metric-footer">
+                      Longitudinal motion<span className="cyan">v</span>
+                    </div>
+                  </article>
+                  <article className="metric panel">
+                    <div className="metric-label">
+                      Angular velocity <Compass size={19} />
+                    </div>
+                    <div className="metric-value">
+                      {value(live?.angular_velocity)}
+                      <small>rad/s</small>
+                    </div>
+                    <div className="metric-footer">
+                      Rotational motion<span className="purple">ω</span>
+                    </div>
+                  </article>
+                  <article className="metric panel">
+                    <div className="metric-label">
+                      Wheel speed <CircuitBoard size={19} />
+                    </div>
+                    <div className="wheel-values">
+                      <div>
+                        <small>LEFT</small>
+                        {value(live?.motors[0].actual_rpm, 1)}
+                        <em>RPM</em>
+                      </div>
+                      <div>
+                        <small>RIGHT</small>
+                        {value(live?.motors[1].actual_rpm, 1)}
+                        <em>RPM</em>
+                      </div>
+                    </div>
+                    <div className="metric-footer">
+                      Wheel response model<span>2 MOTORS</span>
+                    </div>
+                  </article>
                 </div>
-              )}
-              <div className="telemetry-grid">
-                <article className="metric panel">
-                  <div className="metric-label">
-                    Robot status <Wifi size={19} />
+                <div className="operations-grid">
+                  <div className="chart-stack">
+                    <RpmChart
+                      history={connected ? history.slice(-150) : []}
+                      motor="left"
+                    />
+                    <RpmChart
+                      history={connected ? history.slice(-150) : []}
+                      motor="right"
+                    />
                   </div>
-                  <div className="metric-value status-value">
-                    {connected ? (
-                      <>
-                        <span className="status-dot" />
-                        Online
-                      </>
-                    ) : (
-                      "Offline"
-                    )}
+                  <ManualControl
+                    connected={
+                      connected && operator && live?.mode !== "AUTONOMOUS"
+                    }
+                    send={send}
+                    stop={stop}
+                    release={release}
+                  />
+                </div>
+              </>
+            )}
+            {page === "Overview" && (
+              <div className="bottom-grid">
+                <section className="panel">
+                  <div className="panel-heading">
+                    <h2>
+                      <Cpu size={18} />
+                      System health
+                    </h2>
+                    <span className="tag">SIMULATED</span>
                   </div>
-                  <div className="metric-footer">
-                    <span data-testid="operating-mode">
-                      {live?.mode ?? "AWAITING CONNECTION"}
+                  <div className="health-list">
+                    {[
+                      {
+                        label: "CPU load",
+                        Icon: Cpu,
+                        number: health?.cpu_percent,
+                        suffix: "%",
+                        max: 100,
+                      },
+                      {
+                        label: "Memory",
+                        Icon: CircuitBoard,
+                        number: health?.memory_percent,
+                        suffix: "%",
+                        max: 100,
+                      },
+                      {
+                        label: "CPU temperature",
+                        Icon: Thermometer,
+                        number: health?.temperature_c,
+                        suffix: "°C",
+                        max: 85,
+                      },
+                      {
+                        label: "Battery",
+                        Icon: Battery,
+                        number: health?.battery_percent,
+                        suffix: "%",
+                        max: 100,
+                      },
+                    ].map(({ label, Icon, number, suffix, max }) => (
+                      <div key={label} className="health-row">
+                        <div>
+                          <span>
+                            <Icon size={16} />
+                            {label}
+                          </span>
+                          <strong>
+                            {value(number, 0)}
+                            {number === undefined ? "" : suffix}
+                          </strong>
+                        </div>
+                        <div className="progress-track">
+                          <span
+                            style={{ width: `${((number ?? 0) / max) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+                <section className="panel encoder-panel">
+                  <div className="panel-heading">
+                    <h2>
+                      <Zap size={18} />
+                      Encoder feedback
+                    </h2>
+                  </div>
+                  {["Left wheel", "Right wheel"].map((name, index) => (
+                    <div className="encoder-row" key={name}>
+                      <span>
+                        {name}
+                        <small>
+                          {index === 0
+                            ? "M1 / CHANNEL A+B"
+                            : "M2 / CHANNEL A+B"}
+                        </small>
+                      </span>
+                      <strong>
+                        {live
+                          ? live.motors[index].encoder_count.toLocaleString()
+                          : "—"}
+                        <small>counts</small>
+                      </strong>
+                    </div>
+                  ))}
+                  <div className="encoder-note">
+                    ≈ 3,960 counts / revolution
+                    <br />
+                    Signed quadrature count · simulated
+                  </div>
+                </section>
+                <section className="panel events-panel">
+                  <div className="panel-heading">
+                    <h2>
+                      <Terminal size={18} />
+                      Event stream
+                    </h2>
+                    <span className="tag">
+                      {live?.events.length ?? 0} EVENTS
                     </span>
-                    <span>SIMULATED</span>
                   </div>
-                </article>
-                <article className="metric panel">
-                  <div className="metric-label">
-                    Linear velocity <Gauge size={19} />
+                  <div className="events" aria-label="Robot event logs">
+                    {!live && <p className="muted">Waiting for live events…</p>}
+                    {live?.events.map((event) => (
+                      <div className="event" key={event.id}>
+                        <span className={`event-dot ${event.level}`} />
+                        <div>
+                          <p>{event.message}</p>
+                          <time>
+                            {formatTimestamp(event.time)} ·{" "}
+                            {event.level.toUpperCase()}
+                          </time>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div className="metric-value">
-                    {value(live?.linear_velocity)}
-                    <small>m/s</small>
-                  </div>
-                  <div className="metric-footer">
-                    Longitudinal motion<span className="cyan">v</span>
-                  </div>
-                </article>
-                <article className="metric panel">
-                  <div className="metric-label">
-                    Angular velocity <Compass size={19} />
-                  </div>
-                  <div className="metric-value">
-                    {value(live?.angular_velocity)}
-                    <small>rad/s</small>
-                  </div>
-                  <div className="metric-footer">
-                    Rotational motion<span className="purple">ω</span>
-                  </div>
-                </article>
-                <article className="metric panel">
-                  <div className="metric-label">
-                    Wheel speed <CircuitBoard size={19} />
-                  </div>
-                  <div className="wheel-values">
-                    <div>
-                      <small>LEFT</small>
-                      {value(live?.motors[0].actual_rpm, 1)}
-                      <em>RPM</em>
-                    </div>
-                    <div>
-                      <small>RIGHT</small>
-                      {value(live?.motors[1].actual_rpm, 1)}
-                      <em>RPM</em>
-                    </div>
-                  </div>
-                  <div className="metric-footer">
-                    Wheel response model<span>2 MOTORS</span>
-                  </div>
-                </article>
+                </section>
               </div>
-              <div className="operations-grid">
-                <div className="chart-stack">
-                  <RpmChart
-                    history={connected ? history.slice(-150) : []}
-                    motor="left"
-                  />
-                  <RpmChart
-                    history={connected ? history.slice(-150) : []}
-                    motor="right"
-                  />
-                </div>
-                <ManualControl
-                  connected={connected && live?.mode !== "AUTONOMOUS"}
+            )}
+            {page === "Diagnostics" && (
+              <DiagnosticsPage
+                data={live}
+                history={history}
+                lastTimestamp={data?.timestamp}
+                historyError={historyError}
+                events={data?.events ?? []}
+              />
+            )}
+            {page === "Missions" && (
+              <MissionsPage send={send} connected={connected && operator} />
+            )}
+            {page === "Sensors" && (
+              <SensorsPage
+                bundle={sensors.bundle}
+                connection={sensors.connection}
+                error={sensors.error}
+                now={sensors.now}
+              />
+            )}
+            {page === "Navigation" && (
+              <NavigationPage
+                lidar={
+                  sensors.state === "READY" &&
+                  sensors.bundle &&
+                  sensors.bundle.session_id === live?.session_id
+                    ? sensors.bundle.lidar
+                    : null
+                }
+                data={live}
+                connected={connected && operator}
+                send={send}
+                stop={stop}
+              />
+            )}
+            {page === "Settings" && (
+              <>
+                <HomeConfiguration
+                  readOnly={!operator}
+                  data={live}
                   send={send}
-                  stop={stop}
-                  release={release}
                 />
-              </div>
-            </>
-          )}
-          {page === "Overview" && (
-            <div className="bottom-grid">
-              <section className="panel">
-                <div className="panel-heading">
-                  <h2>
-                    <Cpu size={18} />
-                    System health
-                  </h2>
-                  <span className="tag">SIMULATED</span>
-                </div>
-                <div className="health-list">
-                  {[
-                    {
-                      label: "CPU load",
-                      Icon: Cpu,
-                      number: health?.cpu_percent,
-                      suffix: "%",
-                      max: 100,
-                    },
-                    {
-                      label: "Memory",
-                      Icon: CircuitBoard,
-                      number: health?.memory_percent,
-                      suffix: "%",
-                      max: 100,
-                    },
-                    {
-                      label: "CPU temperature",
-                      Icon: Thermometer,
-                      number: health?.temperature_c,
-                      suffix: "°C",
-                      max: 85,
-                    },
-                    {
-                      label: "Battery",
-                      Icon: Battery,
-                      number: health?.battery_percent,
-                      suffix: "%",
-                      max: 100,
-                    },
-                  ].map(({ label, Icon, number, suffix, max }) => (
-                    <div key={label} className="health-row">
-                      <div>
-                        <span>
-                          <Icon size={16} />
-                          {label}
-                        </span>
-                        <strong>
-                          {value(number, 0)}
-                          {number === undefined ? "" : suffix}
-                        </strong>
-                      </div>
-                      <div className="progress-track">
-                        <span
-                          style={{ width: `${((number ?? 0) / max) * 100}%` }}
-                        />
-                      </div>
+                <section className="panel details-panel">
+                  <div className="panel-heading">
+                    <div>
+                      <span className="eyebrow">READ-ONLY CONFIGURATION</span>
+                      <h2>Robot & simulation parameters</h2>
                     </div>
-                  ))}
-                </div>
-              </section>
-              <section className="panel encoder-panel">
-                <div className="panel-heading">
-                  <h2>
-                    <Zap size={18} />
-                    Encoder feedback
-                  </h2>
-                </div>
-                {["Left wheel", "Right wheel"].map((name, index) => (
-                  <div className="encoder-row" key={name}>
-                    <span>
-                      {name}
-                      <small>
-                        {index === 0 ? "M1 / CHANNEL A+B" : "M2 / CHANNEL A+B"}
-                      </small>
-                    </span>
-                    <strong>
-                      {live
-                        ? live.motors[index].encoder_count.toLocaleString()
-                        : "—"}
-                      <small>counts</small>
-                    </strong>
+                    <ShieldCheck size={24} />
                   </div>
-                ))}
-                <div className="encoder-note">
-                  ≈ 3,960 counts / revolution
-                  <br />
-                  Signed quadrature count · simulated
-                </div>
-              </section>
-              <section className="panel events-panel">
-                <div className="panel-heading">
-                  <h2>
-                    <Terminal size={18} />
-                    Event stream
-                  </h2>
-                  <span className="tag">{live?.events.length ?? 0} EVENTS</span>
-                </div>
-                <div className="events" aria-label="Robot event logs">
-                  {!live && <p className="muted">Waiting for live events…</p>}
-                  {live?.events.map((event) => (
-                    <div className="event" key={event.id}>
-                      <span className={`event-dot ${event.level}`} />
-                      <div>
-                        <p>{event.message}</p>
-                        <time>
-                          {formatTimestamp(event.time)} ·{" "}
-                          {event.level.toUpperCase()}
-                        </time>
+                  <div className="detail-grid">
+                    {[
+                      ["Wheel radius", "0.0435 m"],
+                      ["Wheel speed limit", "40 RPM per wheel"],
+                      ["Chassis", "250 × 250 mm · two wheels + caster"],
+                      [
+                        "Encoder polarity (raw)",
+                        live?.drive.encoder_polarity.join(", ") ?? "+1, -1",
+                      ],
+                      ["Autonomous heartbeat timeout", "1.5 s"],
+                      ["Wheel separation", "0.300 m"],
+                      ["Encoder resolution", "≈ 3,960 counts/rev"],
+                      ["Telemetry rate", "10 Hz"],
+                      ["Command timeout", "600 ms"],
+                      ["Control heartbeat", "150 ms"],
+                      ["Planned UART baud", "57,600 (disabled)"],
+                      ["Planned compute", "Raspberry Pi 4"],
+                      ["Planned motor controller", "ESP32-S3 N16R8"],
+                      ["Operating environment", "Simulation only"],
+                    ].map(([label, val]) => (
+                      <div key={label}>
+                        {label}
+                        <strong>{val}</strong>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            </div>
-          )}
-          {page === "Diagnostics" && (
-            <DiagnosticsPage
-              data={live}
-              history={history}
-              lastTimestamp={data?.timestamp}
-              historyError={historyError}
-              events={data?.events ?? []}
-            />
-          )}
-          {page === "Missions" && (
-            <MissionsPage send={send} connected={connected} />
-          )}
-          {page === "Sensors" && (
-            <SensorsPage
-              bundle={sensors.bundle}
-              connection={sensors.connection}
-              error={sensors.error}
-              now={sensors.now}
-            />
-          )}
-          {page === "Navigation" && (
-            <NavigationPage
-              lidar={
-                sensors.state === "READY" &&
-                sensors.bundle &&
-                sensors.bundle.session_id === live?.session_id
-                  ? sensors.bundle.lidar
-                  : null
-              }
-              data={live}
-              connected={connected}
-              send={send}
-              stop={stop}
-            />
-          )}
-          {page === "Settings" && (
-            <>
-              <HomeConfiguration data={live} send={send} />
-              <section className="panel details-panel">
-                <div className="panel-heading">
-                  <div>
-                    <span className="eyebrow">READ-ONLY CONFIGURATION</span>
-                    <h2>Robot & simulation parameters</h2>
+                    ))}
                   </div>
-                  <ShieldCheck size={24} />
-                </div>
-                <div className="detail-grid">
-                  {[
-                    ["Wheel radius", "0.0435 m"],
-                    ["Wheel speed limit", "40 RPM per wheel"],
-                    ["Chassis", "250 × 250 mm · two wheels + caster"],
-                    [
-                      "Encoder polarity (raw)",
-                      live?.drive.encoder_polarity.join(", ") ?? "+1, -1",
-                    ],
-                    ["Autonomous heartbeat timeout", "1.5 s"],
-                    ["Wheel separation", "0.300 m"],
-                    ["Encoder resolution", "≈ 3,960 counts/rev"],
-                    ["Telemetry rate", "10 Hz"],
-                    ["Command timeout", "600 ms"],
-                    ["Control heartbeat", "150 ms"],
-                    ["Planned UART baud", "57,600 (disabled)"],
-                    ["Planned compute", "Raspberry Pi 4"],
-                    ["Planned motor controller", "ESP32-S3 N16R8"],
-                    ["Operating environment", "Simulation only"],
-                  ].map(([label, val]) => (
-                    <div key={label}>
-                      {label}
-                      <strong>{val}</strong>
-                    </div>
-                  ))}
-                </div>
-                <p className="muted">
-                  Home and waypoints are saved on the backend. Drive geometry
-                  remains read-only. No hardware adapters are installed or
-                  invoked.
-                </p>
-              </section>
-            </>
-          )}
+                  <p className="muted">
+                    Home and waypoints are saved on the backend. Drive geometry
+                    remains read-only. No hardware adapters are installed or
+                    invoked.
+                  </p>
+                </section>
+              </>
+            )}
+          </Suspense>
           <footer className="page-footer">
             <span>
               <ShieldCheck size={14} /> PBL4 AMR · Simulation sandbox

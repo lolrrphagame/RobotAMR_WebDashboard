@@ -134,6 +134,7 @@ export interface Diagnostics {
     limit_rpm: number;
   };
   safety: {
+    stop_generation?: number;
     stop_active: boolean;
     last_stop_reason: string | null;
     watchdog: string;

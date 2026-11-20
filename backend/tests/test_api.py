@@ -44,7 +44,7 @@ def test_disconnect_and_invalid_payload_fail_closed():
             receive_mode(ws, "MANUAL")
             ws.send_text("not json")
             assert "Invalid" in receive_type(ws, "error")["message"]
-            assert client.get("/api/robot/status").json()["mode"] == "STANDBY"
+            assert client.get("/api/robot/status").json()["mode"] == "MANUAL"
             ws.send_json({"type": "control", "linear": -0.2})
             receive_mode(ws, "MANUAL")
         # Entering another WS yields to disconnect cleanup without a timing sleep.

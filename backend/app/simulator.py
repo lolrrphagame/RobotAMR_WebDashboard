@@ -25,6 +25,7 @@ class RobotSimulator:
         self.started = time.monotonic()
         self.sample_timestamp = datetime.now(timezone.utc).isoformat()
         self.sample_uptime = 0.0
+        self.inhibited_clients = set()
         self.last_command = self.last_lease = 0.0
         self.owner = None
         self.linear = self.angular = 0.0
@@ -80,8 +81,11 @@ class RobotSimulator:
         self.state.rpm = [0.0, 0.0]
 
     def stop(self, reason="STOP: motion and mission cancelled"):
+        self.safety["stop_generation"] = self.safety.get("stop_generation",0)+1
         self.safety.update(stop_active=True, last_stop_reason=reason, watchdog="disarmed")
         self.counters["stop_commands"] += 1
+        self.halt()
+        if self.owner is not None:self.inhibited_clients.add(self.owner)
         self.operations.finish("cancelled",reason)
         active = self.owner is not None or self.mission.status != "idle"
         self.halt()
@@ -117,6 +121,7 @@ class RobotSimulator:
             self.collision_source = source
 
     def release(self, client, reason="Manual input released"):
+        self.inhibited_clients.discard(client)
         if self.manual_collision_command and self.manual_collision_command[0] == client:
             self.manual_collision_command = None
         if self.owner == client and not self.autonomous_active:
@@ -126,6 +131,7 @@ class RobotSimulator:
             self.log("info", reason)
 
     def disconnect(self, client):
+        self.inhibited_clients.discard(client)
         if self.manual_collision_command and self.manual_collision_command[0] == client:
             self.manual_collision_command = None
         if self.owner != client:
@@ -186,6 +192,7 @@ class RobotSimulator:
         if self.autonomous_active or self.owner not in (None, client):
             self.counters["rejected_commands"] += 1
             return False
+        if client in self.inhibited_clients:return False
         # A held input cannot repeatedly restart after its collision stop.
         if self.manual_collision_command == (client, command.linear, command.angular):
             return True
@@ -320,6 +327,13 @@ class RobotSimulator:
         if sensor_error:
             self.log("error", sensor_error)
         self.history.append(history_sample(self.snapshot()))
+
+    def broadcast_snapshot(self):
+        # One encoded-state preparation per physics update/transition, shared by observers.
+        key=(self.sample_timestamp,self.event_id,self.owner,self.mission.status,self.safety.get('stop_generation',0))
+        if getattr(self,'_broadcast_key',None)!=key:
+            self._broadcast_frame=self.snapshot();self._broadcast_key=key
+        return self._broadcast_frame
 
     def snapshot(self):
         return snapshot(self)

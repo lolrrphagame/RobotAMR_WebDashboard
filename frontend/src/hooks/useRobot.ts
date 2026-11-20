@@ -1,3 +1,4 @@
+import { refreshAuth } from "../auth";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   frameToSample,
@@ -14,10 +15,14 @@ export function useRobot() {
   >("connecting");
   const [error, setError] = useState("");
   const [historyError, setHistoryError] = useState("");
+  const [operator, setOperator] = useState(false);
+  const authorized = useRef(false);
+  const stopGeneration = useRef<number | null>(null);
   const socket = useRef<WebSocket | null>(null);
   const session = useRef<string | null>(null);
   const command = useRef<Command>({ type: "stop" });
   const send = useCallback((next: Command) => {
+    if (!authorized.current) return;
     if (
       next.type === "control" ||
       next.type === "stop" ||
@@ -33,8 +38,20 @@ export function useRobot() {
     let disposed = false;
     let retry: ReturnType<typeof setTimeout>;
     let lastMessage = Date.now();
-    const connect = () => {
+    const connect = async () => {
       if (disposed) return;
+      try {
+        const auth = await refreshAuth();
+        if (disposed) return;
+        authorized.current = auth.role === "operator";
+        setOperator(authorized.current);
+      } catch {
+        if (!disposed) {
+          setConnection("disconnected");
+          retry = setTimeout(connect, 2000);
+        }
+        return;
+      }
       command.current = { type: "stop" };
       const ws = new WebSocket(
         `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/telemetry`,
@@ -78,6 +95,7 @@ export function useRobot() {
           });
       };
       ws.onmessage = (event) => {
+        if (disposed || socket.current !== ws) return;
         try {
           const message = JSON.parse(event.data);
           if (message.type === "ack") {
@@ -97,6 +115,13 @@ export function useRobot() {
           )
             throw Error("Unexpected telemetry");
           const next = message as Telemetry;
+          const generation = next.diagnostics.safety.stop_generation ?? 0;
+          if (
+            stopGeneration.current !== null &&
+            stopGeneration.current !== generation
+          )
+            command.current = { type: "stop" };
+          stopGeneration.current = generation;
           lastMessage = Date.now();
           setConnection("connected");
           setData(next);
@@ -112,10 +137,12 @@ export function useRobot() {
           ws.close();
         }
       };
-      ws.onerror = () =>
+      ws.onerror = () => {
+        if (disposed || socket.current !== ws) return;
         setError(
           "Telemetry service unavailable. Check that the backend is running.",
         );
+      };
       ws.onclose = () => {
         command.current = { type: "stop" };
         if (!disposed) {
@@ -132,6 +159,7 @@ export function useRobot() {
           socket.current.close();
           return;
         }
+        if (!authorized.current) return;
         socket.current.send(JSON.stringify({ type: "heartbeat" }));
         if (command.current.type === "control")
           socket.current.send(JSON.stringify(command.current));
@@ -155,6 +183,7 @@ export function useRobot() {
     };
   }, [stop, release]);
   return {
+    operator,
     data,
     history,
     connection,

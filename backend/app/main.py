@@ -1,4 +1,5 @@
 import asyncio
+import sqlite3
 import json
 import os
 import time
@@ -6,13 +7,14 @@ from contextlib import asynccontextmanager, suppress
 from uuid import uuid4
 from pathlib import Path
 from typing import Literal
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Query
+from fastapi import Request, FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Query
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError
 from .models import command_adapter, ConfigurationCommand, WaypointCommand
 from .configuration import ConfigurationStore, ConfigurationError, ConfigurationConflict
 from .exports import filter_events, csv_export
+from .security import Security, SecurityMiddleware, COOKIE
 from .simulator import RobotSimulator
 from .operations import DefinitionStore, MissionDefinition, OperationsCommand
 from pydantic import TypeAdapter
@@ -21,6 +23,7 @@ operations_adapter = TypeAdapter(ControlCommand | NavigationCommand | WaypointCo
 
 @asynccontextmanager
 async def lifespan(app):
+    app.state.security = Security()
     path = os.getenv("ROBOT_CONFIG_PATH", str(Path(__file__).resolve().parents[1] / "data" / "robot-config.json"))
     store = None if path == ":memory:" else ConfigurationStore(path)
     database = os.getenv("MISSION_DB_PATH", str(Path(__file__).resolve().parents[1] / "data" / "missions.sqlite3"))
@@ -30,20 +33,55 @@ async def lifespan(app):
         while True:
             await asyncio.sleep(0.1)
             now = time.monotonic()
-            app.state.robot.tick(min(now - previous, 0.25))
+            try:app.state.robot.tick(min(now - previous, 0.25))
+            except sqlite3.Error:
+                robot=app.state.robot;robot.halt();robot.owner=None
+                if not robot.operations.persistence_fault:robot.log('error','Mission storage failure: motion halted; repair storage and restart.')
+                robot.operations.persistence_fault=True
+                if robot.operations.current:robot.operations.current.update(status='paused',reason='Storage fault; repair and restart required')
+                if robot.mission.status=='running':robot.mission.status='paused'
             previous = now
     task = asyncio.create_task(simulate())
-    yield
-    task.cancel()
-    with suppress(asyncio.CancelledError):
-        await task
-    app.state.robot.operations.finish("interrupted", "Service shutdown; explicit restart required")
-    app.state.robot.stop("Service shutdown")
-    app.state.robot.operations.store.close()
+    try:
+        yield
+    finally:
+        app.state.robot.halt()
+        task.cancel()
+        await asyncio.gather(task,return_exceptions=True)
+        try:
+            app.state.robot.operations.finish("interrupted", "Service shutdown; explicit restart required")
+            app.state.robot.stop("Service shutdown")
+        finally:
+            app.state.robot.operations.store.close()
 
 app = FastAPI(title="PBL4 AMR Simulation API", lifespan=lifespan)
 origins = os.getenv("ALLOWED_ORIGINS", "http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:4173,http://localhost:4173").split(",")
-app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["GET", "POST"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["GET", "POST", "DELETE"], allow_headers=["Content-Type","X-CSRF-Token"], allow_credentials=True)
+
+app.add_middleware(SecurityMiddleware)
+
+@app.get('/api/auth/session')
+async def auth_session(request:Request):
+    security=app.state.security;session=security.session(request.cookies)
+    return {'role':'operator' if security.operator(request) else 'observer','csrf':session['csrf'] if session else '', 'mode':'lan' if security.lan else 'local'}
+
+@app.post('/api/auth/login')
+async def login(request:Request):
+    security=app.state.security
+    if not security.rate(('login',request.client.host),5):raise HTTPException(429,'Too many login attempts; retry in a minute')
+    try:payload=await request.json();password=payload.get('password','')
+    except (ValueError,AttributeError):raise HTTPException(400,'Password required')
+    if not isinstance(password,str) or len(password)>256:raise HTTPException(400,'Invalid password size')
+    token=security.login(password)
+    if token is None:raise HTTPException(401,'Invalid credentials')
+    response=Response('{}',media_type='application/json')
+    response.set_cookie(COOKIE,token,max_age=28800,httponly=True,secure=True,samesite='strict',path='/')
+    return response
+
+@app.post('/api/auth/logout')
+async def logout(request:Request):
+    app.state.security.sessions.pop(request.cookies.get(COOKIE,''),None)
+    response=Response('{}',media_type='application/json');response.delete_cookie(COOKIE,path='/',secure=True,httponly=True,samesite='strict');return response
 
 @app.get("/api/health")
 def health():
@@ -105,43 +143,51 @@ async def history(limit: int = Query(default=600, ge=1, le=600), format: Literal
 
 @app.websocket("/ws/telemetry")
 async def telemetry(socket: WebSocket):
-    if socket.headers.get("origin") not in origins and socket.headers.get("origin") is not None:
+    if socket.headers.get("origin") not in app.state.security.origins and socket.headers.get("origin") is not None:
         await socket.close(code=1008)
         return
     await socket.accept()
     robot = app.state.robot
     client = str(uuid4())
+    security=app.state.security
+    controller=security.operator(socket)
     async def receive():
         while True:
             try:
                 raw = await socket.receive_text()
-                if len(raw) > 2048:
+                if len(raw.encode("utf-8")) > 2048:
                     raise ValueError("Command too large")
+                if not controller or not security.operator(socket):
+                    await socket.send_json({"type":"error","message":"Authenticated operator required; observer connection is read-only."});await socket.close(code=1008);return
+                if not security.rate(("ws",client),40,1) and json.loads(raw).get("type")!="stop":
+                    await socket.close(code=1008,reason="Control message rate exceeded");return
                 robot.counters["ws_rx_frames"] += 1
                 command = operations_adapter.validate_python(json.loads(raw))
                 if not robot.command(command, client):
                     await socket.send_json({"type": "error", "message": "Control is reserved by another client or mode. Cancel autonomous navigation before manual driving."})
                 elif command.type not in ("heartbeat", "control", "release"):
                     await socket.send_json({"type": "ack"})
+            except sqlite3.Error:
+                robot.halt();robot.disconnect(client)
+                await socket.send_json({'type':'error','message':'Storage failure; motion halted. Repair storage and restart.'})
             except ConfigurationError as exc:
                 robot.counters["rejected_commands"] += 1
                 robot.log("error" if "save failed" in str(exc) else "warning", str(exc))
                 await socket.send_json({"type": "error", "message": str(exc)[:200]})
             except ValidationError:
                 robot.counters["rejected_commands"] += 1
-                robot.disconnect(client)
                 await socket.send_json({"type": "error", "message": "Invalid control command. Controller commands cleared."})
             except json.JSONDecodeError:
                 robot.counters["rejected_commands"] += 1
-                robot.disconnect(client)
                 await socket.send_json({"type": "error", "message": "Invalid control command. Controller commands cleared."})
             except ValueError as exc:
                 robot.counters["rejected_commands"] += 1
-                robot.disconnect(client)
                 await socket.send_json({"type": "error", "message": str(exc)[:180]})
     async def send():
         while True:
-            await socket.send_json(robot.snapshot())
+            if controller and not security.operator(socket):
+                await socket.close(code=1008,reason="Operator session expired");return
+            await socket.send_json(robot.broadcast_snapshot())
             await asyncio.sleep(0.1)
     tasks = [asyncio.create_task(receive()), asyncio.create_task(send())]
     try:
@@ -175,7 +221,7 @@ async def camera():
 
 @app.websocket("/ws/sensors")
 async def sensor_stream(socket: WebSocket):
-    if socket.headers.get("origin") not in origins and socket.headers.get("origin") is not None:
+    if socket.headers.get("origin") not in app.state.security.origins and socket.headers.get("origin") is not None:
         await socket.close(code=1008)
         return
     await socket.accept()
