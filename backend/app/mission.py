@@ -16,6 +16,17 @@ class MissionManager:
         self.cursor = 1
         self.progress = 0.0
         self.reason = "Select a destination on the map"
+        self.last_result = None
+
+    def reset(self, reason="Select a destination on the map", outcome=None):
+        """Clear live mission data, retaining saved waypoints and the last outcome."""
+        if outcome and self.goals:
+            self.last_result = {"status": outcome, "reason": reason,
+                                "progress": self.progress,
+                                "goals": [goal.model_dump() for goal in self.goals]}
+        self.status, self.reason = "idle", reason
+        self.goals, self.legs = [], []
+        self.leg, self.cursor, self.progress = 0, 1, 0.0
 
     @property
     def active(self):
@@ -23,7 +34,8 @@ class MissionManager:
 
     def save(self, name, goal):
         if not self.grid.free(goal.x, goal.y):
-            raise ValueError("Waypoint is occupied or too close to an obstacle")
+            raise ValueError(f"Waypoint {name} at ({goal.x:.2f}, {goal.y:.2f}) lacks "
+                             f"{self.grid.clearance:.3f} m footprint clearance; choose free space")
         self.waypoints[name] = goal.model_copy(update={"name": name})
 
     def sequence(self, names):
@@ -84,4 +96,5 @@ class MissionManager:
                 "current_waypoint": goal.name if goal else None,
                 "waypoint_index": self.leg + 1 if goal else 0, "waypoint_count": len(self.goals),
                 "path": [[x, y] for leg in self.legs for x, y in leg],
+                "last_result": self.last_result,
                 "waypoints": {name: value.model_dump() for name, value in self.waypoints.items()}}

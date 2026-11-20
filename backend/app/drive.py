@@ -19,7 +19,7 @@ class DriveConfig:
     encoder_cpr: int = ENCODER_CPR
     max_rpm: float = MAX_RPM
     acceleration_rpm_s: float = 60.0
-    encoder_polarity: tuple[int, int] = (1, 1)
+    encoder_polarity: tuple[int, int] = (1, -1)
 
     def __post_init__(self):
         if min(self.wheel_radius, self.wheel_separation, self.encoder_cpr,

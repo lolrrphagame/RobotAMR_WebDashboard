@@ -15,6 +15,8 @@ def snapshot(robot):
             "uptime": int(uptime), "linear_velocity": linear, "angular_velocity": angular,
             "pose": {"x": x, "y": y, "yaw": yaw, "frame_id": "map"},
             "home": {"x": HOME[0], "y": HOME[1], "yaw": HOME[2]},
+            "clearance": {"pose_clear": robot.grid.free(x, y),
+                          "radius": robot.grid.clearance},
             "trajectory": list(robot.state.trajectory), "navigation": robot.mission.snapshot(),
             "drive": {"max_rpm": config.max_rpm, "wheel_radius": config.wheel_radius,
                       "wheel_separation": config.wheel_separation, "encoder_cpr": config.encoder_cpr,

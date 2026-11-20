@@ -371,6 +371,16 @@ function App() {
                 <div>
                   UART / GPIO<strong>Disabled</strong>
                 </div>
+                <div>
+                  Current pose clearance
+                  <strong>
+                    {live
+                      ? live.clearance.pose_clear
+                        ? "Clear"
+                        : "OBSTRUCTED"
+                      : "—"}
+                  </strong>
+                </div>
               </div>
             </section>
           )}
@@ -398,7 +408,7 @@ function App() {
                   ["Chassis", "250 × 250 mm · two wheels + caster"],
                   [
                     "Encoder polarity (raw)",
-                    live?.drive.encoder_polarity.join(", ") ?? "+1, +1",
+                    live?.drive.encoder_polarity.join(", ") ?? "+1, -1",
                   ],
                   ["Autonomous heartbeat timeout", "1.5 s"],
                   ["Wheel separation", "0.300 m"],

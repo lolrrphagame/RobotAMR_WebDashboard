@@ -18,6 +18,10 @@ def run_until_finished(robot, limit=2000):
         robot.tick(0.1)
         assert max(map(abs, robot.rpm)) <= 40.000001
         assert robot.grid.free(*robot.state.pose[:2])
+        if robot.mission.status == "idle" and robot.mission.last_result:
+            assert robot.mission.last_result["status"] == "completed"
+            assert robot.mission.last_result["progress"] == 100
+            return
         assert robot.mission.progress >= progress
         progress = robot.mission.progress
         if robot.mission.status != "running":
@@ -99,14 +103,16 @@ def test_waypoint_management_and_atomic_planning():
     robot.command(nav("sequence",waypoints=["A","B","C"]),"a")
     assert [goal.name for goal in robot.mission.goals] == ["A","B","C"]
     run_until_finished(robot)
-    assert robot.mission.status == "completed"
+    assert robot.mission.status == "idle"
+    assert robot.mission.last_result["status"] == "completed"
     assert math.dist(robot.state.pose[:2],(1,2)) < .05
     robot.command(WaypointCommand(type="waypoint",action="delete",name="C"),"a")
     with pytest.raises(ValueError,match="Save every"):
         robot.command(nav("sequence",waypoints=["C"]),"a")
     with pytest.raises(ValueError):
         robot.command(nav("start",goal=Goal(x=3.4,y=2)),"a")
-    assert robot.mission.status == "completed"
+    assert robot.mission.status == "idle"
+    assert robot.mission.last_result["status"] == "completed"
 
 
 def test_follower_reaches_goal_with_heading_and_returns_home():
@@ -114,13 +120,15 @@ def test_follower_reaches_goal_with_heading_and_returns_home():
     goal=Goal(x=4.5,y=1,yaw=math.pi/2)
     robot.command(nav("start",goal=goal),"a")
     run_until_finished(robot)
-    assert robot.mission.status == "completed"
-    assert robot.mission.progress == 100
+    assert robot.mission.status == "idle"
+    assert robot.mission.last_result["status"] == "completed"
+    assert robot.mission.last_result["progress"] == 100
     assert math.dist(robot.state.pose[:2],(goal.x,goal.y)) < .05
     assert abs(wrap_angle(robot.state.pose[2]-goal.yaw)) < .04
     robot.command(nav("home"),"a")
     run_until_finished(robot)
-    assert robot.mission.status == "completed"
+    assert robot.mission.status == "idle"
+    assert robot.mission.last_result["status"] == "completed"
     assert math.dist(robot.state.pose[:2],(1,1)) < .05
 
 
@@ -146,7 +154,8 @@ def test_manual_autonomous_arbitration_pause_resume_and_global_stop():
     robot.command(ControlCommand(type="stop"),"b")
     assert robot.rpm == [0,0]
     assert robot.targets() == [0,0]
-    assert robot.mission.status == "cancelled"
+    assert robot.mission.status == "idle"
+    assert robot.mission.last_result["status"] == "cancelled"
     robot.tick(.1)
     assert robot.mode == "STANDBY"
 
@@ -174,9 +183,10 @@ def test_collision_guard_blocks_manual_motion_without_tunneling():
         robot.command(ControlCommand(type="control",linear=.6),"a")
         robot.tick(.1)
         assert robot.grid.free(*robot.state.pose[:2])
-        if robot.mission.status == "blocked":
+        if any("Manual motion collision prevented" in event["message"] for event in robot.events):
             break
-    assert robot.mission.status == "blocked"
+    assert robot.mission.status == "idle"
+    assert robot.mission.snapshot()["destination"] is None
     assert robot.state.pose[0] < 3.2-robot.grid.clearance
     assert robot.rpm == [0,0]
 
@@ -200,4 +210,5 @@ def test_resume_preserves_completed_waypoints_and_progress():
     assert state["waypoint_count"] == 2
     assert state["progress"] >= round(progress,1)
     run_until_finished(robot)
-    assert robot.mission.status == "completed"
+    assert robot.mission.status == "idle"
+    assert robot.mission.last_result["status"] == "completed"

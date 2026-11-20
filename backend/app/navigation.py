@@ -1,6 +1,31 @@
 """Static ROS-style occupancy data and conservative footprint-aware 4-connected A*."""
 import heapq
 import math
+from .state import CHASSIS_SIZE
+
+
+def point_segment_distance_squared(point, start, end):
+    dx, dy = end[0] - start[0], end[1] - start[1]
+    length_squared = dx * dx + dy * dy
+    t = (max(0, min(1, ((point[0] - start[0]) * dx + (point[1] - start[1]) * dy)
+                   / length_squared)) if length_squared else 0)
+    return (point[0] - start[0] - t * dx) ** 2 + (point[1] - start[1] - t * dy) ** 2
+
+
+def segment_intersects_box(start, end, low, high):
+    """Slab intersection, including tangency and a zero-length segment."""
+    enter, leave = 0.0, 1.0
+    for axis in range(2):
+        direction = end[axis] - start[axis]
+        if abs(direction) < 1e-15:
+            if not low[axis] <= start[axis] <= high[axis]:
+                return False
+        else:
+            a, b = (low[axis] - start[axis]) / direction, (high[axis] - start[axis]) / direction
+            enter, leave = max(enter, min(a, b)), min(leave, max(a, b))
+            if enter > leave:
+                return False
+    return True
 
 
 class OccupancyGrid:
@@ -9,7 +34,7 @@ class OccupancyGrid:
         self.origin = (0.0, 0.0)
         self.frame_id = "map"
         # Circumscribed 250 mm square + 25 mm margin, independent of heading.
-        self.clearance = math.sqrt(2) * 0.125 + 0.025
+        self.clearance = math.sqrt(2) * CHASSIS_SIZE / 2 + 0.025
         self.data = list(data) if data is not None else [0] * (width * height)
         if len(self.data) != width * height:
             raise ValueError("Invalid occupancy grid size")
@@ -46,9 +71,28 @@ class OccupancyGrid:
         return True
 
     def segment_free(self, start, end):
-        n = max(1, math.ceil(math.dist(start[:2], end[:2]) / (self.resolution / 5)))
-        return all(self.free(start[0] + (end[0] - start[0]) * i / n,
-                             start[1] + (end[1] - start[1]) * i / n) for i in range(n + 1))
+        """Continuous swept disk vs cells; no sampling gaps at obstacle corners."""
+        if not self.free(*start[:2]) or not self.free(*end[:2]):
+            return False
+        r, s = self.clearance, self.resolution
+        ox, oy = self.origin
+        x0 = max(0, math.floor((min(start[0], end[0]) - r - ox) / s))
+        x1 = min(self.width - 1, math.floor((max(start[0], end[0]) + r - ox) / s))
+        y0 = max(0, math.floor((min(start[1], end[1]) - r - oy) / s))
+        y1 = min(self.height - 1, math.floor((max(start[1], end[1]) + r - oy) / s))
+        for cy in range(y0, y1 + 1):
+            for cx in range(x0, x1 + 1):
+                if self.data[cy * self.width + cx] == 0:
+                    continue
+                low, high = (ox + cx * s, oy + cy * s), (ox + (cx + 1) * s, oy + (cy + 1) * s)
+                if segment_intersects_box(start, end, low, high):
+                    return False
+                # Endpoint-to-box distances already passed free(). A remaining
+                # closest pair must include a box corner projected onto the segment.
+                corners = (low, high, (low[0], high[1]), (high[0], low[1]))
+                if any(point_segment_distance_squared(c, start, end) <= r * r for c in corners):
+                    return False
+        return True
 
     def snapshot(self):
         return {"id": "warehouse-v1", "frame_id": self.frame_id, "width": self.width,
@@ -58,8 +102,12 @@ class OccupancyGrid:
 
 
 def plan_path(grid: OccupancyGrid, start, goal):
-    if not grid.free(*start[:2]) or not grid.free(*goal[:2]):
-        raise ValueError("Destination or robot position has insufficient obstacle clearance")
+    if not grid.free(*start[:2]):
+        raise ValueError(f"Robot pose ({start[0]:.2f}, {start[1]:.2f}) lacks "
+                         f"{grid.clearance:.3f} m footprint clearance; motion remains stopped")
+    if not grid.free(*goal[:2]):
+        raise ValueError(f"Destination ({goal[0]:.2f}, {goal[1]:.2f}) is occupied, outside the map, "
+                         f"or lacks {grid.clearance:.3f} m footprint clearance; choose free space")
     source, target = grid.cell(start), grid.cell(goal)
     frontier = [(0, source)]
     previous, cost = {source: None}, {source: 0}

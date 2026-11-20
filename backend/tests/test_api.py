@@ -92,4 +92,4 @@ def test_map_navigation_websocket_and_http_share_one_state():
             assert frame["navigation"]["status"] == "paused"
             observer.send_json({"type":"stop"})
             receive_type(observer,"ack")
-            assert client.get("/api/robot/status").json()["navigation"]["status"] == "cancelled"
+            assert client.get("/api/robot/status").json()["navigation"]["status"] == "idle"

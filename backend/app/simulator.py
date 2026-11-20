@@ -23,7 +23,12 @@ class RobotSimulator:
         self.state = RobotState()
         self.drive = DifferentialDrive(config)
         self.grid = grid or OccupancyGrid()
+        if not self.grid.free(*self.state.pose[:2]):
+            raise ValueError("Home pose lacks robot footprint clearance in the supplied map")
         self.mission = MissionManager(self.grid)
+        self.collision_origin = None
+        self.collision_source = None
+        self.manual_collision_command = None
         self.events = deque(maxlen=60)
         self.event_id = 0
         self.log("info", "Navigation simulator initialized. All hardware interfaces disabled.")
@@ -50,21 +55,48 @@ class RobotSimulator:
         self.state.rpm = [0.0, 0.0]
 
     def stop(self, reason="STOP: motion and mission cancelled"):
-        active = self.owner is not None or self.mission.status in ("ready", "running", "paused")
+        active = self.owner is not None or self.mission.status != "idle"
         self.halt()
         self.owner = None
-        if self.mission.status in ("ready", "running", "paused"):
-            self.mission.status, self.mission.reason = "cancelled", reason
+        self.manual_collision_command = None
+        self.mission.reset(reason, outcome="cancelled")
         if active:
             self.log("warning", reason)
 
+    def collision_stop(self, autonomous):
+        """Record one warning per collision episode; never invent a manual mission."""
+        source = "Autonomous navigation" if autonomous else "Manual motion"
+        if not autonomous:
+            self.manual_collision_command = (self.owner, self.linear, self.angular)
+        x, y = self.state.pose[:2]
+        reason = (f"{source} collision prevented at ({x:.2f}, {y:.2f}) m: "
+                  f"{self.grid.clearance:.3f} m footprint clearance required. Motion stopped. ")
+        if not self.grid.free(x, y):
+            reason += "Current pose is obstructed; restore map clearance before moving."
+        elif autonomous:
+            reason += "STOP/cancel to clear the failed mission, or plan a new safe route."
+        else:
+            reason += "Release input and drive away from the obstacle."
+        self.halt()
+        self.owner = None
+        if autonomous:
+            self.mission.status, self.mission.reason = "blocked", reason
+        if self.collision_origin is None or self.collision_source != source:
+            self.log("warning", reason)
+            self.collision_origin = (x, y)
+            self.collision_source = source
+
     def release(self, client, reason="Manual input released"):
+        if self.manual_collision_command and self.manual_collision_command[0] == client:
+            self.manual_collision_command = None
         if self.owner == client and not self.mission.active:
             self.halt()
             self.owner = None
             self.log("info", reason)
 
     def disconnect(self, client):
+        if self.manual_collision_command and self.manual_collision_command[0] == client:
+            self.manual_collision_command = None
         if self.owner != client:
             return
         if self.mission.active:
@@ -99,10 +131,16 @@ class RobotSimulator:
             return True
         if self.mission.active or self.owner not in (None, client):
             return False
+        # A held input cannot repeatedly restart after its collision stop.
+        if self.manual_collision_command == (client, command.linear, command.angular):
+            return True
+        self.manual_collision_command = None
         if command.linear == 0 and command.angular == 0:
             self.release(client)
             return True
-        if self.owner is None:
+        if self.mission.status != "idle":
+            self.mission.reset("Mission cleared for manual control", outcome="cancelled")
+        if self.owner is None and self.collision_origin is None:
             self.log("info", "Manual simulation command engaged (40 RPM wheel limit)")
         self.owner = client
         self.linear, self.angular = command.linear, command.angular
@@ -159,25 +197,29 @@ class RobotSimulator:
         step = dt / steps
         for _ in range(steps):
             if self.mission.status == "running":
+                if not self.grid.free(*self.state.pose[:2]):
+                    self.collision_stop(autonomous=True)
+                    break
                 self.linear, self.angular = self.mission.follow(self.state.pose)
                 if self.mission.status == "completed":
                     self.halt()
                     self.owner = None
                     self.log("info", self.mission.reason)
+                    self.mission.reset(self.mission.reason, outcome="completed")
             target = self.targets()
             actual = self.drive.accelerate(self.rpm, target, step)
             average = [(old + new) / 2 for old, new in zip(self.rpm, actual)]
             next_pose = self.drive.integrate(self.state.pose, average, step)
-            if not self.grid.segment_free(self.state.pose, next_pose):
-                self.halt()
-                self.owner = None
-                self.mission.status, self.mission.reason = "blocked", "Collision guard stopped motion. Select a safe destination."
-                self.log("warning", self.mission.reason)
+            moving = any(abs(rpm) > 1e-12 for rpm in average)
+            if moving and not self.grid.segment_free(self.state.pose, next_pose):
+                self.collision_stop(autonomous=self.mission.status == "running")
                 break
             self.state.pose = next_pose
             self.state.rpm = actual
             for i in range(2):
                 self.counts[i] += average[i] * self.drive.config.encoder_cpr * step / 60
+            if self.collision_origin is not None and math.dist(self.state.pose[:2], self.collision_origin) >= 0.1:
+                self.collision_origin = self.collision_source = None
         point = self.state.pose[:2]
         if math.dist(self.state.trajectory[-1], point) > 0.015:
             self.state.trajectory.append(point)

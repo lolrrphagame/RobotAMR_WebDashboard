@@ -6,6 +6,7 @@ export interface Telemetry {
   uptime: number;
   pose: Pose & { frame_id: string };
   home: Pose;
+  clearance: { pose_clear: boolean; radius: number };
   trajectory: [number, number][];
   navigation: NavigationState;
   drive: {
@@ -47,14 +48,13 @@ export interface Goal extends Pose {
 }
 export type WaypointName = "A" | "B" | "C";
 export interface NavigationState {
-  status:
-    | "idle"
-    | "ready"
-    | "running"
-    | "paused"
-    | "completed"
-    | "cancelled"
-    | "blocked";
+  status: "idle" | "ready" | "running" | "paused" | "blocked";
+  last_result: {
+    status: "completed" | "cancelled";
+    reason: string;
+    progress: number;
+    goals: Goal[];
+  } | null;
   progress: number;
   reason: string;
   destination: Goal | null;

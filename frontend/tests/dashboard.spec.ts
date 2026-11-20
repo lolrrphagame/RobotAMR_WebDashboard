@@ -144,13 +144,13 @@ test("navigation map, heading, waypoints, arbitration and synchronized pose", as
   await page
     .getByRole("button", { name: "STOP · CANCEL ALL MOTION", exact: true })
     .click();
-  await expect(page.getByTestId("navigation-status")).toHaveText("cancelled");
+  await expect(page.getByTestId("navigation-status")).toHaveText("idle");
   await page.getByRole("button", { name: "Return home", exact: true }).click();
   await expect(page.getByTestId("navigation-status")).toHaveText("running");
   await page
     .getByRole("button", { name: "Cancel mission", exact: true })
     .click();
-  await expect(page.getByTestId("navigation-status")).toHaveText("cancelled");
+  await expect(page.getByTestId("navigation-status")).toHaveText("idle");
   expect(errors).toEqual([]);
 });
 
@@ -182,7 +182,7 @@ test("navigation mobile map tools and invalid destinations", async ({
     .getByRole("button", { name: "Start navigation", exact: true })
     .click();
   await expect(
-    page.getByText(/Destination or robot position has insufficient/),
+    page.getByText(/Destination .*footprint clearance/),
   ).toBeVisible();
   await expect(page.getByTestId("navigation-status")).not.toHaveText("running");
 });

@@ -212,7 +212,9 @@ export function NavigationPage({
                 <button
                   disabled={
                     !connected ||
-                    !["running", "paused", "ready"].includes(nav?.status ?? "")
+                    !["running", "paused", "ready", "blocked"].includes(
+                      nav?.status ?? "",
+                    )
                   }
                   onClick={() => send({ type: "navigation", action: "cancel" })}
                 >
