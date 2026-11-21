@@ -1,0 +1,12 @@
+{
+  "reason": "Existing LAN service was left running; retain prior public hashed assets for open tabs. Active entrypoint remains the new build. Graceful backend restart is still required.",
+  "files": [
+    "NavigationPage-DKjWRFvv.js",
+    "charts-B-SxKYIx.js",
+    "SensorsPage-BGzVc8Fd.js",
+    "index-CoRTytWn.js",
+    "react-l0sNRNKZ.js",
+    "MissionsPage-Cvs5u8NP.js",
+    "DiagnosticsPage-DeFpiPhk.js"
+  ]
+}

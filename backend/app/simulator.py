@@ -1,5 +1,6 @@
 """Single simulation coordinator: arbitration, plant stepping and mission safety."""
 import math
+import json
 import time
 from collections import deque
 from datetime import datetime, timezone
@@ -334,6 +335,14 @@ class RobotSimulator:
         if getattr(self,'_broadcast_key',None)!=key:
             self._broadcast_frame=self.snapshot();self._broadcast_key=key
         return self._broadcast_frame
+
+    def broadcast_text(self):
+        """Encode once per authoritative frame, shared by every telemetry consumer."""
+        frame=self.broadcast_snapshot()
+        if getattr(self,'_broadcast_text_frame',None) is not frame:
+            self._broadcast_text=json.dumps(frame,ensure_ascii=False,allow_nan=False,separators=(',',':'))
+            self._broadcast_text_frame=frame
+        return self._broadcast_text
 
     def snapshot(self):
         return snapshot(self)

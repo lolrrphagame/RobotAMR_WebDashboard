@@ -90,6 +90,20 @@ test("refreshing Missions pauses the same execution without duplicating it", asy
     .click();
   await expect(page.getByTestId("operation-status")).toContainText("RUNNING");
   const before = await (await request.get("/api/missions")).json();
+  // View changes share the same authoritative mission and keep its controller socket.
+  for (const name of [
+    "Sensors",
+    "Diagnostics",
+    "Navigation",
+    "Overview",
+    "Missions",
+  ]) {
+    await page.getByRole("button", { name, exact: true }).click();
+    await expect(page.getByText("Stream connected")).toBeVisible();
+    const during = await (await request.get("/api/missions")).json();
+    expect(during.active.id).toBe(before.active.id);
+    expect(during.active.status).toBe("running");
+  }
   await page.reload();
   await expect(page.getByText("Stream connected")).toBeVisible();
   await expect(page.getByTestId("operation-status")).toContainText("PAUSED", {

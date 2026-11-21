@@ -1,0 +1,456 @@
+{
+  "duration_seconds": 30,
+  "observers": 3,
+  "checks": {
+    "anonymous_data_denied": true,
+    "observer_mutation_denied": true,
+    "missions_execute": true,
+    "stop_navigation": true,
+    "cancel_navigation": true,
+    "logout_during_motion": true,
+    "socket_resource_cleanup": true,
+    "camera_placeholder_only": true,
+    "online_wal_backup": true,
+    "restored_integrity": true,
+    "json_backup": true,
+    "restart_revokes_session": true,
+    "observer_session_revoked": true,
+    "restart_stopped": true,
+    "history_preserved": true,
+    "home_waypoint_preserved": true,
+    "ca_preserved": true,
+    "bounded_buffers": true
+  },
+  "errors": [],
+  "resources": [
+    {
+      "elapsed": 1.0019213959999433,
+      "backend": {
+        "cpu_seconds": 0.56,
+        "rss_mib": 51.1484375,
+        "fds": 25
+      },
+      "caddy": {
+        "cpu_seconds": 0.05,
+        "rss_mib": 48.25,
+        "fds": 23
+      }
+    },
+    {
+      "elapsed": 2.0074272860001656,
+      "backend": {
+        "cpu_seconds": 0.58,
+        "rss_mib": 51.3984375,
+        "fds": 25
+      },
+      "caddy": {
+        "cpu_seconds": 0.05,
+        "rss_mib": 48.25,
+        "fds": 23
+      }
+    },
+    {
+      "elapsed": 3.013929332000316,
+      "backend": {
+        "cpu_seconds": 0.61,
+        "rss_mib": 51.6484375,
+        "fds": 25
+      },
+      "caddy": {
+        "cpu_seconds": 0.06,
+        "rss_mib": 48.5,
+        "fds": 23
+      }
+    },
+    {
+      "elapsed": 4.022309706000215,
+      "backend": {
+        "cpu_seconds": 0.65,
+        "rss_mib": 51.6484375,
+        "fds": 25
+      },
+      "caddy": {
+        "cpu_seconds": 0.08,
+        "rss_mib": 48.5,
+        "fds": 23
+      }
+    },
+    {
+      "elapsed": 5.040981689000091,
+      "backend": {
+        "cpu_seconds": 0.69,
+        "rss_mib": 51.8984375,
+        "fds": 25
+      },
+      "caddy": {
+        "cpu_seconds": 0.08,
+        "rss_mib": 48.5,
+        "fds": 23
+      }
+    },
+    {
+      "elapsed": 6.0557414869999775,
+      "backend": {
+        "cpu_seconds": 0.73,
+        "rss_mib": 52.1484375,
+        "fds": 25
+      },
+      "caddy": {
+        "cpu_seconds": 0.09,
+        "rss_mib": 48.5,
+        "fds": 23
+      }
+    },
+    {
+      "elapsed": 7.0732534730000225,
+      "backend": {
+        "cpu_seconds": 0.78,
+        "rss_mib": 52.1484375,
+        "fds": 25
+      },
+      "caddy": {
+        "cpu_seconds": 0.09,
+        "rss_mib": 48.5,
+        "fds": 23
+      }
+    },
+    {
+      "elapsed": 8.087274770000022,
+      "backend": {
+        "cpu_seconds": 0.82,
+        "rss_mib": 52.1484375,
+        "fds": 25
+      },
+      "caddy": {
+        "cpu_seconds": 0.1,
+        "rss_mib": 48.5,
+        "fds": 23
+      }
+    },
+    {
+      "elapsed": 9.097691394000321,
+      "backend": {
+        "cpu_seconds": 0.85,
+        "rss_mib": 52.1484375,
+        "fds": 25
+      },
+      "caddy": {
+        "cpu_seconds": 0.11,
+        "rss_mib": 48.5,
+        "fds": 23
+      }
+    },
+    {
+      "elapsed": 10.145925047000219,
+      "backend": {
+        "cpu_seconds": 0.89,
+        "rss_mib": 52.1484375,
+        "fds": 25
+      },
+      "caddy": {
+        "cpu_seconds": 0.12,
+        "rss_mib": 48.5,
+        "fds": 23
+      }
+    },
+    {
+      "elapsed": 11.157778323000002,
+      "backend": {
+        "cpu_seconds": 0.93,
+        "rss_mib": 52.1484375,
+        "fds": 25
+      },
+      "caddy": {
+        "cpu_seconds": 0.12,
+        "rss_mib": 48.5,
+        "fds": 23
+      }
+    },
+    {
+      "elapsed": 12.180088245000206,
+      "backend": {
+        "cpu_seconds": 0.98,
+        "rss_mib": 52.1484375,
+        "fds": 25
+      },
+      "caddy": {
+        "cpu_seconds": 0.14,
+        "rss_mib": 48.5,
+        "fds": 23
+      }
+    },
+    {
+      "elapsed": 13.200833293999949,
+      "backend": {
+        "cpu_seconds": 1.02,
+        "rss_mib": 52.1484375,
+        "fds": 25
+      },
+      "caddy": {
+        "cpu_seconds": 0.14,
+        "rss_mib": 48.5,
+        "fds": 23
+      }
+    },
+    {
+      "elapsed": 14.2218027480003,
+      "backend": {
+        "cpu_seconds": 1.07,
+        "rss_mib": 52.3984375,
+        "fds": 25
+      },
+      "caddy": {
+        "cpu_seconds": 0.15,
+        "rss_mib": 48.5,
+        "fds": 23
+      }
+    },
+    {
+      "elapsed": 15.256016652000199,
+      "backend": {
+        "cpu_seconds": 1.11,
+        "rss_mib": 52.3984375,
+        "fds": 25
+      },
+      "caddy": {
+        "cpu_seconds": 0.16,
+        "rss_mib": 48.5,
+        "fds": 23
+      }
+    },
+    {
+      "elapsed": 16.274816895000185,
+      "backend": {
+        "cpu_seconds": 1.16,
+        "rss_mib": 52.6484375,
+        "fds": 25
+      },
+      "caddy": {
+        "cpu_seconds": 0.16,
+        "rss_mib": 48.5,
+        "fds": 23
+      }
+    },
+    {
+      "elapsed": 17.291541722000147,
+      "backend": {
+        "cpu_seconds": 1.2,
+        "rss_mib": 52.8984375,
+        "fds": 25
+      },
+      "caddy": {
+        "cpu_seconds": 0.17,
+        "rss_mib": 48.5,
+        "fds": 23
+      }
+    },
+    {
+      "elapsed": 18.30762540400019,
+      "backend": {
+        "cpu_seconds": 1.25,
+        "rss_mib": 52.8984375,
+        "fds": 25
+      },
+      "caddy": {
+        "cpu_seconds": 0.18,
+        "rss_mib": 48.5,
+        "fds": 23
+      }
+    },
+    {
+      "elapsed": 19.324128209000264,
+      "backend": {
+        "cpu_seconds": 1.29,
+        "rss_mib": 52.8984375,
+        "fds": 25
+      },
+      "caddy": {
+        "cpu_seconds": 0.19,
+        "rss_mib": 48.5,
+        "fds": 23
+      }
+    },
+    {
+      "elapsed": 20.33481200799997,
+      "backend": {
+        "cpu_seconds": 1.34,
+        "rss_mib": 53.1484375,
+        "fds": 25
+      },
+      "caddy": {
+        "cpu_seconds": 0.21,
+        "rss_mib": 48.5,
+        "fds": 23
+      }
+    },
+    {
+      "elapsed": 21.353352244000234,
+      "backend": {
+        "cpu_seconds": 1.39,
+        "rss_mib": 53.3984375,
+        "fds": 25
+      },
+      "caddy": {
+        "cpu_seconds": 0.21,
+        "rss_mib": 48.5,
+        "fds": 23
+      }
+    },
+    {
+      "elapsed": 22.371729819999928,
+      "backend": {
+        "cpu_seconds": 1.43,
+        "rss_mib": 53.3984375,
+        "fds": 25
+      },
+      "caddy": {
+        "cpu_seconds": 0.22,
+        "rss_mib": 48.5,
+        "fds": 23
+      }
+    },
+    {
+      "elapsed": 23.3905241450002,
+      "backend": {
+        "cpu_seconds": 1.48,
+        "rss_mib": 53.6484375,
+        "fds": 25
+      },
+      "caddy": {
+        "cpu_seconds": 0.23,
+        "rss_mib": 48.5,
+        "fds": 23
+      }
+    },
+    {
+      "elapsed": 24.420650165000097,
+      "backend": {
+        "cpu_seconds": 1.53,
+        "rss_mib": 53.6484375,
+        "fds": 25
+      },
+      "caddy": {
+        "cpu_seconds": 0.23,
+        "rss_mib": 48.5,
+        "fds": 23
+      }
+    },
+    {
+      "elapsed": 25.432363375000023,
+      "backend": {
+        "cpu_seconds": 1.57,
+        "rss_mib": 53.6484375,
+        "fds": 25
+      },
+      "caddy": {
+        "cpu_seconds": 0.25,
+        "rss_mib": 48.5,
+        "fds": 23
+      }
+    },
+    {
+      "elapsed": 26.45630707400005,
+      "backend": {
+        "cpu_seconds": 1.63,
+        "rss_mib": 54.1484375,
+        "fds": 25
+      },
+      "caddy": {
+        "cpu_seconds": 0.25,
+        "rss_mib": 48.5,
+        "fds": 23
+      }
+    },
+    {
+      "elapsed": 27.478622973000256,
+      "backend": {
+        "cpu_seconds": 1.68,
+        "rss_mib": 54.1484375,
+        "fds": 25
+      },
+      "caddy": {
+        "cpu_seconds": 0.26,
+        "rss_mib": 48.75,
+        "fds": 23
+      }
+    },
+    {
+      "elapsed": 28.50559550600019,
+      "backend": {
+        "cpu_seconds": 1.72,
+        "rss_mib": 54.1484375,
+        "fds": 25
+      },
+      "caddy": {
+        "cpu_seconds": 0.27,
+        "rss_mib": 48.75,
+        "fds": 23
+      }
+    },
+    {
+      "elapsed": 29.523567041000206,
+      "backend": {
+        "cpu_seconds": 1.77,
+        "rss_mib": 54.1484375,
+        "fds": 25
+      },
+      "caddy": {
+        "cpu_seconds": 0.27,
+        "rss_mib": 48.75,
+        "fds": 23
+      }
+    }
+  ],
+  "processes": {
+    "backend": {
+      "cpu_percent_one_core": 4.2602451936898875,
+      "rss_start_mib": 50.3984375,
+      "rss_end_mib": 54.3984375,
+      "rss_delta_mib": 4.0,
+      "fds_start": 25,
+      "fds_end": 25
+    },
+    "caddy": {
+      "cpu_percent_one_core": 0.7655128082411518,
+      "rss_start_mib": 48.25,
+      "rss_end_mib": 48.75,
+      "rss_delta_mib": 0.5,
+      "fds_start": 23,
+      "fds_end": 23
+    }
+  },
+  "elapsed_seconds": 30.04521903800014,
+  "mission_cycles_started": 2,
+  "http_history_plus_missions_p95_ms": 20.276887999898463,
+  "streams": {
+    "telemetry": {
+      "frames": 1190,
+      "json_bytes": 9543980
+    },
+    "sensors": {
+      "frames": 592,
+      "json_bytes": 2240705
+    }
+  },
+  "completed_before_stop": 1,
+  "observer_reconnects": 5,
+  "resources_after_stream_cleanup": {
+    "backend": {
+      "cpu_seconds": 1.84,
+      "rss_mib": 54.3984375,
+      "fds": 17
+    },
+    "caddy": {
+      "cpu_seconds": 0.3,
+      "rss_mib": 48.75,
+      "fds": 7
+    }
+  },
+  "buffers": {
+    "history": 305,
+    "events": 26,
+    "trajectory": 38
+  },
+  "restored_execution_count": 2,
+  "passed": true
+}

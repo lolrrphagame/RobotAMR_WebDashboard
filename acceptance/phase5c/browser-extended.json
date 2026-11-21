@@ -1,0 +1,352 @@
+{
+  "browser": "159.0.8154.6",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "pageTransitions": 84,
+  "socketCounts": [
+    {
+      "page": "Overview",
+      "sockets": 1
+    },
+    {
+      "page": "Manual Control",
+      "sockets": 1
+    },
+    {
+      "page": "Navigation",
+      "sockets": 2
+    },
+    {
+      "page": "Missions",
+      "sockets": 1
+    },
+    {
+      "page": "Sensors",
+      "sockets": 2
+    },
+    {
+      "page": "Diagnostics",
+      "sockets": 1
+    },
+    {
+      "page": "Settings",
+      "sockets": 1
+    },
+    {
+      "page": "Overview",
+      "sockets": 1
+    },
+    {
+      "page": "Manual Control",
+      "sockets": 1
+    },
+    {
+      "page": "Navigation",
+      "sockets": 2
+    },
+    {
+      "page": "Missions",
+      "sockets": 1
+    },
+    {
+      "page": "Sensors",
+      "sockets": 2
+    },
+    {
+      "page": "Diagnostics",
+      "sockets": 1
+    },
+    {
+      "page": "Settings",
+      "sockets": 1
+    },
+    {
+      "page": "Overview",
+      "sockets": 1
+    },
+    {
+      "page": "Manual Control",
+      "sockets": 1
+    },
+    {
+      "page": "Navigation",
+      "sockets": 2
+    },
+    {
+      "page": "Missions",
+      "sockets": 1
+    },
+    {
+      "page": "Sensors",
+      "sockets": 2
+    },
+    {
+      "page": "Diagnostics",
+      "sockets": 1
+    },
+    {
+      "page": "Settings",
+      "sockets": 1
+    },
+    {
+      "page": "Overview",
+      "sockets": 1
+    },
+    {
+      "page": "Manual Control",
+      "sockets": 1
+    },
+    {
+      "page": "Navigation",
+      "sockets": 2
+    },
+    {
+      "page": "Missions",
+      "sockets": 1
+    },
+    {
+      "page": "Sensors",
+      "sockets": 2
+    },
+    {
+      "page": "Diagnostics",
+      "sockets": 1
+    },
+    {
+      "page": "Settings",
+      "sockets": 1
+    },
+    {
+      "page": "Overview",
+      "sockets": 1
+    },
+    {
+      "page": "Manual Control",
+      "sockets": 1
+    },
+    {
+      "page": "Navigation",
+      "sockets": 2
+    },
+    {
+      "page": "Missions",
+      "sockets": 1
+    },
+    {
+      "page": "Sensors",
+      "sockets": 2
+    },
+    {
+      "page": "Diagnostics",
+      "sockets": 1
+    },
+    {
+      "page": "Settings",
+      "sockets": 1
+    },
+    {
+      "page": "Overview",
+      "sockets": 1
+    },
+    {
+      "page": "Manual Control",
+      "sockets": 1
+    },
+    {
+      "page": "Navigation",
+      "sockets": 2
+    },
+    {
+      "page": "Missions",
+      "sockets": 1
+    },
+    {
+      "page": "Sensors",
+      "sockets": 2
+    },
+    {
+      "page": "Diagnostics",
+      "sockets": 1
+    },
+    {
+      "page": "Settings",
+      "sockets": 1
+    },
+    {
+      "page": "Overview",
+      "sockets": 1
+    },
+    {
+      "page": "Manual Control",
+      "sockets": 1
+    },
+    {
+      "page": "Navigation",
+      "sockets": 2
+    },
+    {
+      "page": "Missions",
+      "sockets": 1
+    },
+    {
+      "page": "Sensors",
+      "sockets": 2
+    },
+    {
+      "page": "Diagnostics",
+      "sockets": 1
+    },
+    {
+      "page": "Settings",
+      "sockets": 1
+    },
+    {
+      "page": "Overview",
+      "sockets": 1
+    },
+    {
+      "page": "Manual Control",
+      "sockets": 1
+    },
+    {
+      "page": "Navigation",
+      "sockets": 2
+    },
+    {
+      "page": "Missions",
+      "sockets": 1
+    },
+    {
+      "page": "Sensors",
+      "sockets": 2
+    },
+    {
+      "page": "Diagnostics",
+      "sockets": 1
+    },
+    {
+      "page": "Settings",
+      "sockets": 1
+    },
+    {
+      "page": "Overview",
+      "sockets": 1
+    },
+    {
+      "page": "Manual Control",
+      "sockets": 1
+    },
+    {
+      "page": "Navigation",
+      "sockets": 2
+    },
+    {
+      "page": "Missions",
+      "sockets": 1
+    },
+    {
+      "page": "Sensors",
+      "sockets": 2
+    },
+    {
+      "page": "Diagnostics",
+      "sockets": 1
+    },
+    {
+      "page": "Settings",
+      "sockets": 1
+    },
+    {
+      "page": "Overview",
+      "sockets": 1
+    },
+    {
+      "page": "Manual Control",
+      "sockets": 1
+    },
+    {
+      "page": "Navigation",
+      "sockets": 2
+    },
+    {
+      "page": "Missions",
+      "sockets": 1
+    },
+    {
+      "page": "Sensors",
+      "sockets": 2
+    },
+    {
+      "page": "Diagnostics",
+      "sockets": 1
+    },
+    {
+      "page": "Settings",
+      "sockets": 1
+    },
+    {
+      "page": "Overview",
+      "sockets": 1
+    },
+    {
+      "page": "Manual Control",
+      "sockets": 1
+    },
+    {
+      "page": "Navigation",
+      "sockets": 2
+    },
+    {
+      "page": "Missions",
+      "sockets": 1
+    },
+    {
+      "page": "Sensors",
+      "sockets": 2
+    },
+    {
+      "page": "Diagnostics",
+      "sockets": 1
+    },
+    {
+      "page": "Settings",
+      "sockets": 1
+    },
+    {
+      "page": "Overview",
+      "sockets": 1
+    },
+    {
+      "page": "Manual Control",
+      "sockets": 1
+    },
+    {
+      "page": "Navigation",
+      "sockets": 2
+    },
+    {
+      "page": "Missions",
+      "sockets": 1
+    },
+    {
+      "page": "Sensors",
+      "sockets": 2
+    },
+    {
+      "page": "Diagnostics",
+      "sockets": 1
+    },
+    {
+      "page": "Settings",
+      "sockets": 1
+    }
+  ],
+  "jsHeapBeforeMiB": 6.5072784423828125,
+  "jsHeapAfterMiB": 9.920379638671875,
+  "jsHeapGrowthMiB": 3.4131011962890625,
+  "taskCpuSeconds": 1.77173,
+  "chartRafHz": 60.120906131666246,
+  "note": "Headless Chromium laptop sample, forced GC before heap samples; not a long-run leak proof or mobile/Pi benchmark."
+}

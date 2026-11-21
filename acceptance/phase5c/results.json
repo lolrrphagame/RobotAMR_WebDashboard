@@ -1,0 +1,62 @@
+{
+  "date": "2026-11-22",
+  "baseline_git_revision": "967e024",
+  "test_results": {
+    "backend": {
+      "passed": 245,
+      "failed": 0,
+      "skipped": 0,
+      "private_interface_test": "explicit laptop private IPv4; temporary credentials and data"
+    },
+    "development_playwright": {
+      "passed": 16,
+      "failed": 0
+    },
+    "local_production_playwright": {
+      "passed": 6,
+      "failed": 0
+    },
+    "lan_playwright": {
+      "passed": 4,
+      "failed": 0
+    },
+    "frontend_build": "passed",
+    "focused_browser_profile": {
+      "passed": 1,
+      "failed": 0
+    },
+    "extended_browser_profile": {
+      "passed": 1,
+      "failed": 0,
+      "page_transitions": 84
+    }
+  },
+  "baseline_backend": {
+    "passed": 235,
+    "skipped": 1
+  },
+  "environment": {
+    "os": "Ubuntu 22.04.5 LTS",
+    "machine": "x86_64",
+    "python": "3.10.12",
+    "cpu": "AMD Ryzen 9 8945HX",
+    "logical_cpus": 32,
+    "ram_kib": 32644172,
+    "node": "24.22.3",
+    "caddy": "2.11.9"
+  },
+  "pending_manual": [
+    "mobile HTTPS root trust",
+    "native Ubuntu Brave workflow (CA import user-reported)",
+    "Windows Chrome/Edge",
+    "actual Android browser",
+    "real DNS/DHCP handover",
+    "longer supervised soak",
+    "Raspberry Pi deployment and performance"
+  ],
+  "notes": [
+    "micro-after bundle list predates the final chart split; current artifact sizes are in bundle-final.json",
+    "JSON traffic excludes TLS/TCP/WebSocket framing and compression",
+    "benchmarks are laptop samples, not Pi measurements"
+  ]
+}

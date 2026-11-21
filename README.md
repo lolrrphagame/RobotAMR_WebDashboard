@@ -1,6 +1,28 @@
-# PBL4 AMR Mission Control — Phase 5B.2 · Security Option B
+# PBL4 AMR Mission Control — Phase 5C · Final Simulation Acceptance
 
 A simulation-only industrial robot dashboard built with React, TypeScript, Vite, Tailwind CSS, Recharts and FastAPI. No ROS, serial, GPIO, camera or motor interfaces are imported or opened. All controls, encoder readings and health values are simulated.
+
+## Phase 5C: acceptance, measured optimization and Pi readiness
+
+**Simulation baseline ready for review/freeze with documented manual exceptions.** Final automated results: **245 backend tests** (including opt-in private-interface staging), **16 development**, **6 local-production**, and **4 trusted-HTTPS LAN browser tests**, plus the production build, passed. The normal backend command without `PBL4_LAN_TEST_IP` reports 244 passed / one explicit network skip. The existing AnyIO deprecation is non-failing; the empty React-chunk build warning was eliminated.
+
+Read [PHASE5C_FINAL_REPORT.md](PHASE5C_FINAL_REPORT.md), [FINAL_ACCEPTANCE_CHECKLIST.md](FINAL_ACCEPTANCE_CHECKLIST.md), and [RASPBERRY_PI_READINESS.md](RASPBERRY_PI_READINESS.md). Sanitized measurements and metadata are retained in [acceptance/phase5c](acceptance/phase5c).
+
+Changes are limited to shared telemetry JSON encoding, bounded SQL archive reads/aggregation, single-flight abortable mission polling, deferred chart loading, private backup output and explicit SQLite connection cleanup. The existing design, simulation/controller behavior, account/session protections and TLS boundaries are preserved. Initial login JavaScript fell from 714,246 to 260,569 raw bytes. Measured 30/60/120-second runs used one Operator, three read-only Observer clients and temporary data/certificates; 120 seconds completed five missions. These are laptop results, not Pi capacity estimates or proof of absence of long-run leaks.
+
+The existing user LAN process was left untouched; apply backend changes with a coordinated graceful restart after reviewing the report. Previous public hashed assets were retained for open tabs; stop the service before future builds/updates.
+
+The native workflow starts only an isolated loopback HTTPS LAN-mode simulator, installs nothing, and refuses an existing output report. Existing `.tools/caddy`, built assets and project-local dependencies are prerequisites:
+
+```bash
+cd ~/Projects/PBL4_Dashboard
+env -u PYTHONPATH backend/.venv/bin/python backend/tools/phase5c.py \
+  --seconds 30 --observers 3 --output "/tmp/pbl4-soak-$(date +%s).json"
+```
+
+Optional later supervised soak: use `--seconds 1800` (tool cap 3600 seconds / six Observers). Bounded component benchmarks use `--micro`. Browser navigation profiling supports `PBL4_BROWSER_CYCLES=12 npm --prefix frontend run test:production -- --grep 'all pages remain'` (1–12 cycles; three by default). Standard verification commands are in the final report.
+
+**Ubuntu Brave CA import is user-reported and preserved. Mobile HTTPS trust remains pending / unverified.** Actual Windows/Android/Brave end-to-end acceptance, real private-DNS/DHCP handover, longer soak/large archive checks and Pi ARM64 deployment/performance/service validation remain manual. No Pi or hardware was accessed, no real credentials/data/CA were reset, and nothing was pushed to GitHub. Future ROS 2/UART work is documented only; the simulator is still the only active backend. Earlier phase verification counts below are historical milestones.
 
 ## Secure LAN accounts — Security Option B
 
@@ -25,7 +47,18 @@ npm --prefix frontend run build
 
 Open `https://<configured-LAN-host-or-IP>:8443` only after verifying/installing the configured CA trust. FastAPI stays on `127.0.0.1:8001`, one worker. The separate local launcher remains `./start-dashboard.sh`. No service, firewall or system package is installed automatically. Nothing connects to real hardware.
 
-Security Option B verification: **190 backend tests passed**, including opt-in private-interface HTTPS/WSS staging; **16 development**, **3 local production**, and **4 trusted-HTTPS LAN Playwright tests passed**; the frontend build passed. No final failures or skipped tests in that backend run. Normal pytest without `PBL4_LAN_TEST_IP` reports 189 passed and one explicit private-interface skip. Tests use isolated accounts/certificates/JSON/SQLite, not developer records. Remaining dependency notices: the existing AnyIO deprecation and Vite's empty `react` chunk. Real Windows/mobile trust/access, router/firewall review, long-session load and Raspberry Pi testing remain manual.
+For a laptop that changes Wi-Fi addresses, keep a stable private DNS name and opt in to startup detection in your existing **private** LAN env:
+
+```dotenv
+LAN_HOST=amr.home.arpa
+LAN_BIND_IP=auto
+ALLOWED_HOSTS=amr.home.arpa
+ALLOWED_ORIGINS=https://amr.home.arpa:8443
+```
+
+Keep your account, certificate and `LAN_STATE_DIR` settings unchanged. Run `./start-dashboard-lan.sh --check` before starting. Detection requires one active physical Ethernet/Wi-Fi IPv4 interface, one usable RFC1918 address, and one ordinary private-gateway default route. Ambiguous interfaces/addresses, VPN or policy routes, and public addresses are refused. The hostname's private DNS A record must already resolve **only** to the selected address; the launcher never edits DNS or relaxes Host/Origin rules. Caddy alone binds that address; FastAPI stays on loopback. On a network change, stop, update private DNS if needed, check, and restart; there is no automatic live rebinding or mission resume. Keep the same CA/state directory and hostname; no certificate authority is reset for a new IP. Supplied certificates are checked for hostname SAN and validity dates. For a permanent Pi 4, prefer a **router DHCP reservation plus private DNS**. See [network portability and limits](PHASE5B2_DEPLOYMENT.md#portable-private-lan-addresses) for details.
+
+Network-portability verification: **236 backend tests passed**, including opt-in private-interface HTTPS/WSS staging; **16 development**, **3 local production**, and **4 trusted-HTTPS LAN Playwright tests passed**; the frontend build passed. No final failures or skipped tests in that backend run. Normal pytest without `PBL4_LAN_TEST_IP` reports 235 passed and one explicit private-interface skip. The 46 new network/TLS tests cover DHCP address changes, DNS mismatch, ambiguous interfaces, VPN/policy routes, public/invalid addresses, certificate validity and CA continuity. Network changes are isolated snapshots, not changes to the laptop or router. Tests use isolated accounts/certificates/JSON/SQLite, not developer records. Remaining dependency notices: the existing AnyIO deprecation and Vite's empty `react` chunk. Real Windows/mobile trust/access, router/firewall review, long-session load and Raspberry Pi testing remain manual.
 
 ## Phase 5B.1: local production deployment
 

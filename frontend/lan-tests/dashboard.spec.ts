@@ -25,7 +25,12 @@ test("anonymous sees only login; authenticated Observer monitors without control
   page,
 }, testInfo) => {
   const sockets: string[] = [];
+  const chartRequests: string[] = [];
   page.on("websocket", (socket) => sockets.push(socket.url()));
+  page.on("request", (request) => {
+    if (/\/assets\/(charts-|RpmChart-)/.test(request.url()))
+      chartRequests.push(request.url());
+  });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/navigation");
   await expect(
@@ -35,6 +40,7 @@ test("anonymous sees only login; authenticated Observer monitors without control
     page.getByRole("navigation", { name: "Main navigation" }),
   ).toHaveCount(0);
   expect(sockets).toEqual([]);
+  expect(chartRequests).toEqual([]);
   expect(
     await page.evaluate(async () => (await fetch("/api/map")).status),
   ).toBe(401);

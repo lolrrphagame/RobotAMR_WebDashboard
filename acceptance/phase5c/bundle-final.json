@@ -1,0 +1,61 @@
+{
+  "files": [
+    {
+      "file": "assets/DiagnosticsPage-D97lhfnK.js",
+      "bytes": 15368,
+      "gzip_bytes": 4587
+    },
+    {
+      "file": "assets/MissionsPage-BF1LBMDi.js",
+      "bytes": 12441,
+      "gzip_bytes": 4025
+    },
+    {
+      "file": "assets/NavigationPage-DeWM-Voy.js",
+      "bytes": 17540,
+      "gzip_bytes": 5796
+    },
+    {
+      "file": "assets/RpmChart-95r72PtQ.js",
+      "bytes": 1640,
+      "gzip_bytes": 773
+    },
+    {
+      "file": "assets/SensorsPage-B6qn0vVQ.js",
+      "bytes": 8312,
+      "gzip_bytes": 2919
+    },
+    {
+      "file": "assets/charts-BVLSRWOw.js",
+      "bytes": 452153,
+      "gzip_bytes": 128420
+    },
+    {
+      "file": "assets/index-Bgn1pRvO.css",
+      "bytes": 45756,
+      "gzip_bytes": 10790
+    },
+    {
+      "file": "assets/index-DX0-WmUd.js",
+      "bytes": 38281,
+      "gzip_bytes": 12944
+    },
+    {
+      "file": "assets/react-DbW7YYE4.js",
+      "bytes": 222288,
+      "gzip_bytes": 68949
+    },
+    {
+      "file": "index.html",
+      "bytes": 638,
+      "gzip_bytes": 365
+    }
+  ],
+  "initial_js": [
+    "/assets/index-DX0-WmUd.js",
+    "/assets/react-DbW7YYE4.js"
+  ],
+  "initial_js_bytes": 260569,
+  "initial_js_gzip_estimate": 81893,
+  "note": "Current build only; retained-assets.json lists compatibility files excluded here. Gzip values are estimates, not newly enabled transport compression."
+}

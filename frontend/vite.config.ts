@@ -12,7 +12,14 @@ export default defineConfig(({ mode }) => {
     build: {
       rollupOptions: {
         output: {
-          manualChunks: { charts: ["recharts"], react: ["react", "react-dom"] },
+          manualChunks(id) {
+            if (
+              /\/node_modules\/(react|react-dom|scheduler)\//.test(id) ||
+              id.includes("commonjsHelpers")
+            )
+              return "react";
+            if (id.includes("/node_modules/recharts/")) return "charts";
+          },
         },
       },
     },

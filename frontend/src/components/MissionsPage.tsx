@@ -565,12 +565,19 @@ export function MissionsPage({
   const [version, setVersion] = useState(0);
   useEffect(() => {
     let disposed = false;
+    let loading = false;
+    let activeController: AbortController | null = null;
     const load = async () => {
+      if (disposed || loading) return;
+      loading = true;
+      const controller = new AbortController();
+      activeController = controller;
       try {
         const [a, b] = await Promise.all([
-          fetch("/api/missions"),
+          fetch("/api/missions", { signal: controller.signal }),
           fetch(
             `/api/missions/history?${new URLSearchParams({ status, q: query })}`,
+            { signal: controller.signal },
           ),
         ]);
         if (!a.ok || !b.ok) throw Error("Mission service unavailable");
@@ -581,13 +588,18 @@ export function MissionsPage({
           setLoadError("");
         }
       } catch (e) {
+        controller.abort(); // Abort the other leg if either parallel request fails.
         if (!disposed) setLoadError(String(e));
+      } finally {
+        loading = false;
+        if (activeController === controller) activeController = null;
       }
     };
     void load();
     const timer = setInterval(() => void load(), 1000);
     return () => {
       disposed = true;
+      activeController?.abort();
       clearInterval(timer);
     };
   }, [version, status, query]);

@@ -81,7 +81,7 @@ Edit `~/.config/pbl4/lan.env` privately. The supplied `192.168.1.100` and `YOUR_
 | --- | --- |
 | `APP_MODE` | Exactly `lan` |
 | `LAN_HOST` | One lowercase private DNS name or the server's explicit private IPv4 address |
-| `LAN_BIND_IP` | The server's actual RFC1918 IPv4 interface address |
+| `LAN_BIND_IP` | Explicit RFC1918 IPv4 interface address, or opt-in `auto` with a stable DNS hostname |
 | `HTTPS_PORT` | Default 8443, permitted range 1024–65535 |
 | `BACKEND_PORT` | Default 8001; a different non-privileged port, always bound to 127.0.0.1 |
 | `ALLOWED_HOSTS` | Exactly `LAN_HOST`, without a port, no aliases/wildcards |
@@ -94,6 +94,40 @@ Edit `~/.config/pbl4/lan.env` privately. The supplied `192.168.1.100` and `YOUR_
 | `MISSION_DB_PATH`, `ROBOT_CONFIG_PATH` | Optional absolute paths to existing saved files; omit to preserve `backend/data` defaults |
 
 For a hostname such as `amr.home.arpa`, arrange your private router/DNS to resolve that name **only to `LAN_BIND_IP`**, on the server and every client. Local server-only hosts entries do not configure mobile clients. Using the explicit private IP is simpler for initial testing. There is no automatic mDNS/DNS configuration. Prefer a DHCP reservation; changing addresses requires configuration/certificate review. IPv6 access is intentionally unsupported in this phase.
+
+## Portable private LAN addresses
+
+Explicit `LAN_BIND_IP=<private IPv4>` remains the default and keeps existing behavior, including explicit loopback staging. To opt into conservative **startup-only** detection, change only these lines in your existing private env:
+
+```dotenv
+LAN_HOST=amr.home.arpa
+LAN_BIND_IP=auto
+ALLOWED_HOSTS=amr.home.arpa
+ALLOWED_ORIGINS=https://amr.home.arpa:8443
+```
+
+Retain the existing account path, TLS settings, ports and **same `LAN_STATE_DIR`**. If your HTTPS port differs, use that exact port in the allowed origin. Automatic mode requires a stable dotted DNS hostname, not an IP literal. Nothing derives a hostname/allowlist from a detected IP, introduces wildcards, edits the private file, or modifies users or saved robot state. Operator/Observer authentication, secure cookies, session/CSRF checks and both socket authorization rules remain mandatory.
+
+Before starting, run:
+
+```bash
+./start-dashboard-lan.sh --config "$HOME/.config/pbl4/lan.env" --check
+./start-dashboard-lan.sh --config "$HOME/.config/pbl4/lan.env"
+```
+
+The check prints the stable HTTPS URL and the selected Caddy bind address. Discovery uses only bounded, read-only Linux `ip -j` address/link/route/rule queries and `/sys/class/net` device information. It sends no Internet probe and requires no sudo or networking package installation. Missing/unsupported tools or network data cause an actionable error, without an automatic fallback or network listener.
+
+Automatic mode accepts **one** active physical Ethernet/Wi-Fi interface with **one** usable, non-deprecated RFC1918 IPv4 address/subnet, one default route through a different private gateway on that subnet, and the ordinary local/main/default Linux routing rules. It rejects multiple active IPv4 interfaces or aliases (even if route metrics differ), multiple/no default routes, multipath, split-default VPN routes, alternate route tables/policy rules, routes using another interface, VPN/tunnel/bridge/container interfaces, and public/reserved/loopback/link-local addresses. An inactive Ethernet link without IPv4 routes does not conflict with active Wi-Fi. This intentionally conservative mode does not guess which network you trust. Use a disconnected VPN/unused interface or a separately reviewed explicit bind for unsupported topologies. Detection is not certification of upstream router trust or absence of transparent/policy-based VPNs outside these visible Linux IPv4 routes.
+
+**DNS remains an administrator responsibility.** Before any server worker starts, the configured name's IPv4 answers must contain exactly the selected IP. Missing, stale, multiple or public answers abort startup with the expected address and instructions to fix private DNS/cache. Configure the router's private DNS/DHCP hostname registration or update its A record when DHCP changes. Every Windows/mobile client must use a resolver that can resolve this private name; guest Wi-Fi, captive portals, VPN DNS and server-only hosts entries may not provide that. Avoid unusable AAAA records because this launcher serves IPv4 only. No router, DNS, mDNS, hosts file or firewall is changed automatically. A new Wi-Fi network may require its own private DNS configuration; automatic bind selection cannot make `amr.home.arpa` resolve there by itself.
+
+On a Wi-Fi/network/address change: stop the existing supervisor gracefully, reconnect, fix/wait for private DNS, run `--check`, then restart. It detects the new address and binds **only Caddy** to it. FastAPI is still `127.0.0.1`, one worker, with only loopback proxy trust. There is no hot rebinding, DNS failover, network-change daemon or automatic mission resume. If the address disappears during startup, the bind error tells you to recheck networking/DNS. Changes after startup require a deliberate restart; the launcher does not continuously monitor interfaces or DNS.
+
+The hostname is the TLS identity, so changing the IP alone does not require a new hostname certificate or CA. Internal TLS keeps the same Caddy storage path, root and client trust. The launcher records the existing root certificate's fingerprint as private `LAN_STATE_DIR/ca-root.sha256` after successful Caddy validation; later mismatched roots or incomplete root/key pairs are rejected before Caddy can replace them. Existing complete legacy CA storage is adopted without altering its keys. `--check` never writes a fingerprint or creates a CA. Initial internal-TLS provisioning remains Caddy's existing behavior. Preserve/back up the whole private runtime directory including the fingerprint; deleting the entire directory also loses its continuity record, so do not use a new/empty state directory as a network troubleshooting step. An intentional CA rotation requires separately verified client trust; this feature never deletes certificates/keys or updates OS trust stores.
+
+With `TLS_MODE=provided`, OpenSSL checks the leaf certificate's matching hostname/IP SAN and validity period during configuration validation. A stale IP-only certificate will not work for the stable hostname: supply a certificate covering that hostname. Caddy still checks certificate/key loading/matching, and clients still validate the chain, identity, validity and trust. No verification is disabled; expiry/name/clock errors require renewal or correction. The check does not certify that every Windows/mobile client trusts the issuer. See [OpenSSL identity/date inspection](https://docs.openssl.org/3.0/man1/openssl-x509/) and [Caddy certificate storage](https://caddyserver.com/docs/conventions).
+
+For the permanent Raspberry Pi 4 host, **DHCP reservation on the router is recommended**, together with a stable private DNS name. This avoids frequent A-record changes and keeps administration predictable. The laptop's startup auto mode is a portability convenience, not a replacement for router/DNS provisioning. No real Pi or robot hardware is accessed by this feature.
 
 ### First Operator and additional users
 
@@ -240,7 +274,7 @@ The frontend authentication boundary unmounts all private components, closes soc
 
 ## Verification and troubleshooting
 
-Security Option B verification on 2026-11-21: baseline 160 backend tests passed with one opt-in network skip. Final verification passed **190 backend tests**, including the opt-in same-laptop private-interface test; **16 development**, **3 local-production**, and **4 trusted-HTTPS LAN Playwright tests**, plus the production build. No final test failures/skips in the opt-in backend run. Without a configured private-interface address the backend suite reports 189 passed / one explicit skip. Existing AnyIO deprecation and Vite empty-`react`-chunk notices remain. These results do not certify remote-device trust, firewall/router behavior or Pi performance.
+Network-portability verification on 2026-11-21: baseline 189 backend tests passed with one opt-in network skip. Final verification passed **236 backend tests**, including the opt-in same-laptop private-interface test; **16 development**, **3 local-production**, and **4 trusted-HTTPS LAN Playwright tests**, plus the production build. No final test failures/skips in the opt-in backend run. Without a configured private-interface address the backend suite reports 235 passed / one explicit skip. Existing AnyIO deprecation and Vite empty-`react`-chunk notices remain. The 46 new network/TLS tests use isolated snapshots to simulate DHCP changes, stale/multiple DNS answers, ambiguous NICs, VPN routes, public addresses, certificate errors and CA continuity. No test changes laptop/router networking. These results do not certify real Wi-Fi handover, private DNS updates, remote-device trust, firewall/router behavior or Pi performance.
 
 Automated tests use temporary certificates, configuration and databases, never the user's saved records. Run from the repository:
 

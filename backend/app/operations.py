@@ -53,6 +53,11 @@ class DefinitionStore:
     def __init__(self,path=':memory:'):
         if path!=':memory:': Path(path).parent.mkdir(parents=True,exist_ok=True)
         self.db=sqlite3.connect(str(path),timeout=5)
+        try:self.db.execute("SELECT json_valid('{}')")
+        except sqlite3.OperationalError as exc:
+            self.db.close()
+            raise ValueError('SQLite JSON functions are required for mission history/analytics; verify the Python SQLite build before deployment') from exc
+        self.db.create_function('pbl4_casefold',1,lambda value:(value or '').casefold(),deterministic=True)
         self.db.execute('PRAGMA busy_timeout=5000')
         version=self.db.execute('PRAGMA user_version').fetchone()[0]
         if version>1:self.db.close();raise ValueError('Unsupported future mission database version; no migration applied')
@@ -84,6 +89,40 @@ class DefinitionStore:
     def records(self,active_only=False):
         query="SELECT body FROM executions" + (" WHERE status IN ('running','paused')" if active_only else '') + " ORDER BY rowid DESC"
         return [json.loads(row[0]) for row in self.db.execute(query)]
+
+    def history_filter(self,status,query):
+        where="status NOT IN ('running','paused')"
+        parameters=[]
+        if status!='all':where+=' AND status=?';parameters.append(status)
+        if query:
+            where+=" AND instr(pbl4_casefold(json_extract(body,'$.name')),?)>0"
+            parameters.append(query.casefold())
+        return where,parameters
+
+    def history(self,status='all',query='',limit=None):
+        where,parameters=self.history_filter(status,query)
+        sql='SELECT body FROM executions WHERE '+where+' ORDER BY rowid DESC'
+        if limit is not None:sql+=' LIMIT ?';parameters.append(limit)
+        return [json.loads(row[0]) for row in self.db.execute(sql,parameters)]
+
+    def history_count(self,status='all',query=''):
+        where,parameters=self.history_filter(status,query)
+        return self.db.execute('SELECT count(*) FROM executions WHERE '+where,parameters).fetchone()[0]
+
+    def analytics(self):
+        # Aggregate inside SQLite instead of retaining/decoding the whole archive in Python.
+        where="status NOT IN ('running','paused')"
+        row=self.db.execute("""SELECT count(*),
+            coalesce(sum(status='completed'),0),coalesce(sum(status='cancelled'),0),
+            coalesce(sum(status='failed'),0),coalesce(sum(status='interrupted'),0),
+            coalesce(avg(json_extract(body,'$.duration')),0),
+            coalesce(sum(json_extract(body,'$.distance')),0),
+            coalesce(sum(json_extract(body,'$.waypoint_visits')),0)
+            FROM executions WHERE """+where).fetchone()
+        trends=self.db.execute("SELECT substr(json_extract(body,'$.started_at'),1,10),count(*) FROM executions WHERE "+where+' GROUP BY 1 ORDER BY 1').fetchall()
+        return dict(total=row[0],completed=row[1],cancelled=row[2],failed=row[3],interrupted=row[4],
+                    success_rate=row[1]/row[0]*100 if row[0] else 0,average_duration=row[5],distance=row[6],
+                    waypoint_visits=row[7],trends=[{'date':day,'missions':count} for day,count in trends])
 
     def close(self):
         try:self.db.execute('PRAGMA wal_checkpoint(PASSIVE)')
@@ -243,17 +282,8 @@ class Operations:
 
     def snapshot(self):return {'active':self.current,'queue':self.queue,'templates':self.templates,'capacity':20}
 
-    def history(self,status='all',query=''):
-        return [r for r in self.store.records() if r['status'] not in ('running','paused') and
-                (status=='all' or r['status']==status) and query.casefold() in r['name'].casefold()]
+    def history(self,status='all',query='',limit=None):
+        return self.store.history(status,query,limit)
 
     def analytics(self):
-        records=self.history();n=len(records);completed=sum(r['status']=='completed' for r in records)
-        trends={}
-        for r in records:
-            day=r['started_at'][:10];trends[day]=trends.get(day,0)+1
-        return {'total':n,'completed':completed,'cancelled':sum(r['status']=='cancelled' for r in records),
-                'failed':sum(r['status']=='failed' for r in records),'interrupted':sum(r['status']=='interrupted' for r in records),
-                'success_rate':completed/n*100 if n else 0,'average_duration':sum(r['duration'] for r in records)/n if n else 0,
-                'distance':sum(r['distance'] for r in records),'waypoint_visits':sum(r['waypoint_visits'] for r in records),
-                'trends':[{'date':d,'missions':v} for d,v in sorted(trends.items())]}
+        return self.store.analytics()

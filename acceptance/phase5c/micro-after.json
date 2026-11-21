@@ -1,0 +1,80 @@
+{
+  "physics_tick": {
+    "samples": 200,
+    "mean_ms": 0.981866335016548,
+    "p95_ms": 2.563393999935215
+  },
+  "lidar_scan": {
+    "samples": 200,
+    "mean_ms": 1.218223365005997,
+    "p95_ms": 1.2727920002362225
+  },
+  "snapshot_json": {
+    "samples": 200,
+    "mean_ms": 0.06290344998433284,
+    "p95_ms": 0.06886399978611735
+  },
+  "four_consumer_serialization": {
+    "mean_ms": 0.07272247999480896,
+    "p95_ms": 0.08192399991457933
+  },
+  "archive_1000_history_and_analytics": {
+    "samples": 30,
+    "mean_ms": 3.413662800024516,
+    "p95_ms": 3.7364519998845935
+  },
+  "bundle": [
+    {
+      "file": "assets/DiagnosticsPage-Cd9NgjjO.js",
+      "bytes": 15292,
+      "gzip_bytes": 4552
+    },
+    {
+      "file": "assets/MissionsPage-Bm3q-vAS.js",
+      "bytes": 12372,
+      "gzip_bytes": 3990
+    },
+    {
+      "file": "assets/NavigationPage-Cuwf_1oY.js",
+      "bytes": 17541,
+      "gzip_bytes": 5797
+    },
+    {
+      "file": "assets/SensorsPage-Dn2NrJv8.js",
+      "bytes": 8308,
+      "gzip_bytes": 2921
+    },
+    {
+      "file": "assets/charts-B-SxKYIx.js",
+      "bytes": 464610,
+      "gzip_bytes": 132508
+    },
+    {
+      "file": "assets/index-Bgn1pRvO.css",
+      "bytes": 45756,
+      "gzip_bytes": 10790
+    },
+    {
+      "file": "assets/index-CHyftJl8.js",
+      "bytes": 249636,
+      "gzip_bytes": 78543
+    },
+    {
+      "file": "assets/react-l0sNRNKZ.js",
+      "bytes": 1,
+      "gzip_bytes": 21
+    },
+    {
+      "file": "index.html",
+      "bytes": 639,
+      "gzip_bytes": 365
+    }
+  ],
+  "environment": {
+    "machine": "x86_64",
+    "python": "3.10.12",
+    "sqlite": "3.37.2",
+    "logical_cpus": 32,
+    "note": "Laptop measurements; not Raspberry Pi results."
+  }
+}

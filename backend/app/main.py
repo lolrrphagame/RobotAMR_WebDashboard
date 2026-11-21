@@ -191,7 +191,7 @@ async def telemetry(socket: WebSocket):
         while True:
             if not security.authenticated(socket):
                 await socket.close(code=1008,reason="Authentication expired or revoked");return
-            await socket.send_json(robot.broadcast_snapshot())
+            await socket.send_text(robot.broadcast_text())
             await asyncio.sleep(0.1)
     tasks = [asyncio.create_task(receive()), asyncio.create_task(send())]
     try:
@@ -266,7 +266,7 @@ async def sensor_stream(socket: WebSocket):
 @app.get('/api/missions')
 async def mission_operations():
     r=app.state.robot.operations
-    return {**r.snapshot(),'history':r.history()[:200],'analytics':r.analytics()}
+    return {**r.snapshot(),'history':r.history(limit=200),'analytics':r.analytics()}
 
 @app.post('/api/missions')
 async def create_mission(definition: MissionDefinition, template: bool=False):
@@ -293,9 +293,10 @@ async def remove_mission(id:str,template:bool=False):
 
 @app.get('/api/missions/history')
 async def mission_history(status:Literal['all','completed','cancelled','failed','interrupted']='all',q:str=Query('',max_length=200),format:Literal['json','csv']='json'):
-    rows=app.state.robot.operations.history(status,q)
+    operations=app.state.robot.operations
+    rows=operations.history(status,q,limit=None if format=='csv' else 1000)
     if format=='csv':
         columns=['id','mission_id','name','started_at','finished_at','duration','status','distance','completed_steps','waypoint_visits','reason','start_pose','end_pose','steps']
         export_rows=[{**r,'steps':json.dumps(r['steps']),'start_pose':json.dumps(r['start_pose']),'end_pose':json.dumps(r['end_pose'])} for r in rows]
         return Response(csv_export(export_rows,columns),media_type='text/csv',headers={'Content-Disposition':'attachment; filename="pbl4-missions.csv"'})
-    return {'records':rows[:1000],'total':len(rows)}
+    return {'records':rows,'total':operations.store.history_count(status,q)}

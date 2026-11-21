@@ -1,0 +1,100 @@
+{
+  "browser": "159.0.8154.6",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "pageTransitions": 21,
+  "socketCounts": [
+    {
+      "page": "Overview",
+      "sockets": 1
+    },
+    {
+      "page": "Manual Control",
+      "sockets": 1
+    },
+    {
+      "page": "Navigation",
+      "sockets": 2
+    },
+    {
+      "page": "Missions",
+      "sockets": 1
+    },
+    {
+      "page": "Sensors",
+      "sockets": 2
+    },
+    {
+      "page": "Diagnostics",
+      "sockets": 1
+    },
+    {
+      "page": "Settings",
+      "sockets": 1
+    },
+    {
+      "page": "Overview",
+      "sockets": 1
+    },
+    {
+      "page": "Manual Control",
+      "sockets": 1
+    },
+    {
+      "page": "Navigation",
+      "sockets": 2
+    },
+    {
+      "page": "Missions",
+      "sockets": 1
+    },
+    {
+      "page": "Sensors",
+      "sockets": 2
+    },
+    {
+      "page": "Diagnostics",
+      "sockets": 1
+    },
+    {
+      "page": "Settings",
+      "sockets": 1
+    },
+    {
+      "page": "Overview",
+      "sockets": 1
+    },
+    {
+      "page": "Manual Control",
+      "sockets": 1
+    },
+    {
+      "page": "Navigation",
+      "sockets": 2
+    },
+    {
+      "page": "Missions",
+      "sockets": 1
+    },
+    {
+      "page": "Sensors",
+      "sockets": 2
+    },
+    {
+      "page": "Diagnostics",
+      "sockets": 1
+    },
+    {
+      "page": "Settings",
+      "sockets": 1
+    }
+  ],
+  "jsHeapBeforeMiB": 6.339622497558594,
+  "jsHeapAfterMiB": 9.25088119506836,
+  "jsHeapGrowthMiB": 2.9112586975097656,
+  "taskCpuSeconds": 0.723177,
+  "chartRafHz": 60.12290317223053,
+  "note": "Headless Chromium laptop sample, forced GC before heap samples; not a long-run leak proof or mobile/Pi benchmark."
+}

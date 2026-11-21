@@ -43,7 +43,9 @@ const NavigationPage = lazy(() =>
 );
 import { MissionSummary } from "./components/MissionSummary";
 import { ManualControl } from "./components/ManualControl";
-import { RpmChart } from "./components/RpmChart";
+const RpmChart = lazy(() =>
+  import("./components/RpmChart").then((m) => ({ default: m.RpmChart })),
+);
 import { useSensors } from "./hooks/useSensors";
 const SensorsPage = lazy(() =>
   import("./components/SensorsPage").then((m) => ({ default: m.SensorsPage })),
