@@ -10,6 +10,7 @@ import sys
 import time
 import uvicorn
 from .lan_config import LanConfig, ROOT
+from .lan_tls import ca_continuity
 
 
 def run_backend():
@@ -54,6 +55,8 @@ def serve(config):
     proxy_env.update({'XDG_DATA_HOME': str(config.state / 'data'), 'XDG_CONFIG_HOME': str(config.state / 'config')})
     subprocess.run([config.caddy, 'validate', '--config', str(filename), '--adapter', 'caddyfile'],
                    env=proxy_env, check=True, timeout=30)
+    if config.values.get('TLS_MODE', 'internal') == 'internal':
+        ca_continuity(config.state, record=True)
     env = config.backend_environment()
     database = Path(env.get('MISSION_DB_PATH', str(ROOT / 'backend/data/missions.sqlite3'))).resolve()
     lock_path = database.with_suffix(database.suffix + '.production.lock')
@@ -79,7 +82,10 @@ def serve(config):
         # Reserve/check the exact private bind before starting a robot lifespan.
         with socket.socket() as probe:
             probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            probe.bind((config.bind, config.https_port))
+            try:
+                probe.bind((config.bind, config.https_port))
+            except OSError as exc:
+                raise ValueError(f'Cannot bind Caddy to {config.bind}:{config.https_port}: {exc}. Check for an occupied port or a network/address change; rerun --check after fixing DNS. No backend worker was started.') from exc
         env['PBL4_LAN_SOCKET_FD'] = str(listener.fileno())
         for sig in (signal.SIGINT, signal.SIGTERM):
             old_handlers[sig] = signal.signal(sig, shutdown)
@@ -119,6 +125,7 @@ def serve(config):
         else:
             raise ValueError('Timed out waiting for Caddy HTTPS listener')
         print(f'PBL4 HTTPS LAN dashboard: {config.origin}', flush=True)
+        print(f'Caddy private bind: {config.bind}:{config.https_port} ({config.values["LAN_BIND_IP"]} configuration)', flush=True)
         print(f'SIMULATION ONLY · supervisor PID {os.getpid()} · backend 127.0.0.1:{config.backend_port} · one worker', flush=True)
         print('Ctrl+C / SIGTERM to this supervisor stops proxy then backend and closes SQLite.', flush=True)
         if config.values.get('TLS_MODE', 'internal') == 'internal':
@@ -149,7 +156,7 @@ def main():
     try:
         config = LanConfig.load(args.config)
         if args.check:
-            print(f'Valid LAN configuration: {config.origin}. No listeners started; no application data opened.')
+            print(f'Valid LAN configuration: {config.origin}; Caddy bind {config.bind}:{config.https_port}. No listeners started; no application data opened.')
             return
         serve(config)
     except (ValueError, OSError, subprocess.SubprocessError) as exc:

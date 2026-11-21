@@ -9,10 +9,11 @@ import socket
 import stat
 from dataclasses import dataclass
 from dotenv import dotenv_values
+from .lan_network import RFC1918, detect_lan_ipv4
+from .lan_tls import validate_certificate, ca_continuity
 
 ROOT = Path(__file__).resolve().parents[2]
-PRIVATE_NETWORKS = tuple(ipaddress.ip_network(n) for n in
-                         ('10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '127.0.0.0/8'))
+PRIVATE_NETWORKS = (*RFC1918, ipaddress.ip_network('127.0.0.0/8'))
 KEYS = {'APP_MODE', 'LAN_HOST', 'LAN_BIND_IP', 'HTTPS_PORT', 'BACKEND_PORT',
         'ALLOWED_HOSTS', 'ALLOWED_ORIGINS', 'OPERATOR_PASSWORD_HASH', 'TLS_MODE',
         'TLS_CERT_FILE', 'TLS_KEY_FILE', 'CADDY_BIN', 'LAN_STATE_DIR',
@@ -80,13 +81,24 @@ class LanConfig:
             raise ValueError('LAN_HOST must be one explicit IPv4 address or DNS hostname, without a scheme, port or wildcard')
         if any(not label or len(label) > 63 or label.startswith('-') or label.endswith('-') for label in host.split('.')):
             raise ValueError('Invalid LAN_HOST DNS label')
-        bind = private_ipv4(values.get('LAN_BIND_IP', ''))
+        if values.get('LAN_BIND_IP') == 'auto':
+            # Automatic address changes must never change the browser/TLS identity.
+            try:
+                ipaddress.ip_address(host)
+            except ValueError:
+                if '.' not in host or re.fullmatch(r'[0-9.]+', host):
+                    raise ValueError('LAN_BIND_IP=auto requires a stable private DNS hostname, such as amr.home.arpa')
+            else:
+                raise ValueError('LAN_BIND_IP=auto requires a stable private DNS hostname, not an IP literal')
+            bind = detect_lan_ipv4()
+        else:
+            bind = private_ipv4(values.get('LAN_BIND_IP', ''))
         try:
             addresses = {entry[4][0] for entry in socket.getaddrinfo(host, None, socket.AF_INET, socket.SOCK_STREAM)}
         except socket.gaierror as exc:
-            raise ValueError('LAN_HOST does not resolve to IPv4; configure private DNS or use the explicit LAN IP') from exc
+            raise ValueError(f'LAN_HOST {host} does not resolve to IPv4. Configure its private DNS A record for {bind}; no listener was started.') from exc
         if addresses != {bind}:
-            raise ValueError('LAN_HOST must resolve only to the configured LAN_BIND_IP')
+            raise ValueError(f'LAN_HOST {host} must resolve only to LAN_BIND_IP {bind}; resolved {", ".join(sorted(addresses)) or "no addresses"}. Update private DNS, clear stale DNS caches and retry; no listener was started.')
         https = port(values.get('HTTPS_PORT', '8443'), 'HTTPS_PORT')
         backend = port(values.get('BACKEND_PORT', '8001'), 'BACKEND_PORT')
         if https == backend:
@@ -106,6 +118,7 @@ class LanConfig:
                 if not values.get(name):
                     raise ValueError(f'{name} is required with TLS_MODE=provided')
                 values[name] = str(private_file(values[name]))
+            validate_certificate(values['TLS_CERT_FILE'], host)
         elif values.get('TLS_CERT_FILE') or values.get('TLS_KEY_FILE'):
             raise ValueError('TLS certificate/key paths require TLS_MODE=provided')
         state = outside_repository(values.get('LAN_STATE_DIR', str(filename.parent / 'lan-runtime')))
@@ -113,6 +126,8 @@ class LanConfig:
             info = state.lstat()
             if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077:
                 raise ValueError('LAN_STATE_DIR must be an owned directory with chmod 700, without symlinks')
+        if mode == 'internal':
+            ca_continuity(state)
         for name in ('MISSION_DB_PATH', 'ROBOT_CONFIG_PATH'):
             if name in values and (not Path(values[name]).is_absolute() or values[name] == ':memory:'):
                 raise ValueError(f'{name} must be an absolute persistent path')
