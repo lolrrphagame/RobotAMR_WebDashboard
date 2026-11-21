@@ -27,6 +27,7 @@ const MissionsPage = lazy(() =>
   })),
 );
 import { OperatorSession } from "./components/OperatorSession";
+import { AuthBoundary } from "./components/AuthBoundary";
 
 const DiagnosticsPage = lazy(() =>
   import("./components/DiagnosticsPage").then((m) => ({
@@ -61,7 +62,7 @@ const pagePath = (name: string) =>
   "/" + name.toLowerCase().replaceAll(" ", "-");
 const pageFromPath = () =>
   pages.find((p) => pagePath(p.name) === location.pathname)?.name ?? "Overview";
-function App() {
+function Dashboard() {
   const [page, setPage] = useState(pageFromPath);
   useEffect(() => {
     const navigate = () => setPage(pageFromPath());
@@ -285,6 +286,7 @@ function App() {
                     />
                   </div>
                   <ManualControl
+                    readOnly={!operator}
                     connected={
                       connected && operator && live?.mode !== "AUTONOMOUS"
                     }
@@ -518,4 +520,10 @@ function App() {
     </div>
   );
 }
-export default App;
+export default function App() {
+  return (
+    <AuthBoundary>
+      <Dashboard />
+    </AuthBoundary>
+  );
+}

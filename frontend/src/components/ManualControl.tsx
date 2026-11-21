@@ -9,11 +9,13 @@ import { useEffect, useRef, useState } from "react";
 import type { Command } from "../types";
 export function ManualControl({
   connected,
+  readOnly = false,
   send,
   stop,
   release: releaseInput,
 }: {
   connected: boolean;
+  readOnly?: boolean;
   send: (c: Command) => void;
   stop: () => void;
   release: () => void;
@@ -111,6 +113,7 @@ export function ManualControl({
         ))}
         <button
           className="stop"
+          disabled={readOnly}
           onClick={() => {
             release();
             stop();

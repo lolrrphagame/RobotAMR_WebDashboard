@@ -43,6 +43,7 @@ export function useRobot() {
       try {
         const auth = await refreshAuth();
         if (disposed) return;
+        if (!auth.authenticated) return;
         authorized.current = auth.role === "operator";
         setOperator(authorized.current);
       } catch {
@@ -143,9 +144,14 @@ export function useRobot() {
           "Telemetry service unavailable. Check that the backend is running.",
         );
       };
-      ws.onclose = () => {
+      ws.onclose = (event) => {
         command.current = { type: "stop" };
         if (!disposed) {
+          if (event.code === 1008) {
+            setData(null);
+            setHistory([]);
+            void refreshAuth().catch(() => {});
+          }
           setConnection("disconnected");
           retry = setTimeout(connect, 2000);
         }

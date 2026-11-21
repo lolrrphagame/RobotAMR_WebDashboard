@@ -63,17 +63,21 @@ app.add_middleware(SecurityMiddleware)
 @app.get('/api/auth/session')
 async def auth_session(request:Request):
     security=app.state.security;session=security.session(request.cookies)
-    return {'role':'operator' if security.operator(request) else 'observer','csrf':session['csrf'] if session else '', 'mode':'lan' if security.lan else 'local'}
+    local=security.local(request.scope)
+    return {'role':'operator' if local else session['role'] if session else None,
+            'authenticated':local or session is not None,'username':'local-developer' if local else session['username'] if session else None,
+            'csrf':session['csrf'] if session else '', 'mode':'lan' if security.lan else 'local'}
 
 @app.post('/api/auth/login')
 async def login(request:Request):
     security=app.state.security
     if not security.rate(('login',request.client.host),5):raise HTTPException(429,'Too many login attempts; retry in a minute')
-    try:payload=await request.json();password=payload.get('password','')
+    try:payload=await request.json();password=payload.get('password','');name=payload.get('username','')
     except (ValueError,AttributeError):raise HTTPException(400,'Password required')
-    if not isinstance(password,str) or len(password)>256:raise HTTPException(400,'Invalid password size')
-    token=security.login(password)
+    if not isinstance(password,str) or len(password)>256 or not isinstance(name,str) or len(name)>64:raise HTTPException(400,'Invalid credentials format')
+    token=security.login(name,password)
     if token is None:raise HTTPException(401,'Invalid credentials')
+    security.sessions.pop(request.cookies.get(COOKIE,''),None)
     response=Response('{}',media_type='application/json')
     response.set_cookie(COOKIE,token,max_age=28800,httponly=True,secure=True,samesite='strict',path='/')
     return response
@@ -185,8 +189,8 @@ async def telemetry(socket: WebSocket):
                 await socket.send_json({"type": "error", "message": str(exc)[:180]})
     async def send():
         while True:
-            if controller and not security.operator(socket):
-                await socket.close(code=1008,reason="Operator session expired");return
+            if not security.authenticated(socket):
+                await socket.close(code=1008,reason="Authentication expired or revoked");return
             await socket.send_json(robot.broadcast_snapshot())
             await asyncio.sleep(0.1)
     tasks = [asyncio.create_task(receive()), asyncio.create_task(send())]
@@ -230,6 +234,8 @@ async def sensor_stream(socket: WebSocket):
     async def publish():
         previous = None
         while True:
+            if not app.state.security.authenticated(socket):
+                await socket.close(code=1008,reason="Authentication expired or revoked");return
             bundle = robot.sensors.snapshot()
             signature = tuple((bundle[name]["sequence"], bundle[name]["status"], bundle[name]["error"])
                               for name in ("lidar", "camera"))

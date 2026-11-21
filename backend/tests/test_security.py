@@ -8,7 +8,12 @@ from app.models import ControlCommand
 from app.operations import MissionDefinition,OperationsCommand
 
 @pytest.fixture
-def lan(monkeypatch):
+def lan(monkeypatch, tmp_path):
+    from app.accounts import AccountStore
+    store=AccountStore(tmp_path/'accounts.json')
+    store.create('operator','operator',password_hash('test-password'))
+    store.create('observer','observer',password_hash('observer-password'))
+    monkeypatch.setenv('ACCOUNT_STORE_PATH',str(store.path))
     monkeypatch.setenv('APP_MODE','lan');monkeypatch.setenv('ALLOWED_HOSTS','robot.test')
     monkeypatch.setenv('ALLOWED_ORIGINS','https://robot.test');monkeypatch.setenv('OPERATOR_PASSWORD_HASH',password_hash('test-password'))
     with TestClient(app,base_url='https://robot.test') as c:yield c
@@ -16,20 +21,21 @@ def lan(monkeypatch):
 
 def test_lan_sessions_observers_csrf_logout_and_hosts(lan):
     c=lan;origin={'origin':'https://robot.test'}
-    assert c.get('/api/auth/session').json()['role']=='observer'
+    assert c.get('/api/auth/session').json()['role'] is None
     assert c.post('/api/configuration',json={'type':'configuration','action':'reset_home'},headers=origin).status_code==401
-    assert c.post('/api/auth/login',json={'password':'bad'},headers=origin).status_code==401
-    assert c.post('/api/auth/login',json={'password':'test-password'},headers=origin).status_code==200
+    assert c.post('/api/auth/login',json={'username':'operator','password':'bad'},headers=origin).status_code==401
+    assert c.post('/api/auth/login',json={'username':'operator','password':'test-password'},headers=origin).status_code==200
     state=c.get('/api/auth/session').json();assert state['role']=='operator'
     assert c.post('/api/configuration',json={'type':'configuration','action':'reset_home'},headers=origin).status_code==403
     headers={**origin,'x-csrf-token':state['csrf']}
     assert c.post('/api/configuration',json={'type':'configuration','action':'reset_home'},headers=headers).status_code==200
     assert c.get('/api/health',headers={'host':'evil.test'}).status_code==400
     assert c.post('/api/auth/logout',headers=headers).status_code==200
-    assert c.get('/api/auth/session').json()['role']=='observer'
+    assert c.get('/api/auth/session').json()['role'] is None
 
 
 def test_observer_websocket_cannot_command(lan):
+    assert lan.post('/api/auth/login',json={'username':'observer','password':'observer-password'},headers={'origin':'https://robot.test'}).status_code==200
     with lan.websocket_connect('wss://robot.test/ws/telemetry',headers={'origin':'https://robot.test'}) as ws:
         ws.receive_json();ws.send_json({'type':'control','linear':.1})
         for _ in range(10):
@@ -41,7 +47,7 @@ def test_observer_websocket_cannot_command(lan):
 
 def test_session_revocation_disconnects_motion(lan):
     c=lan;headers={'origin':'https://robot.test'}
-    c.post('/api/auth/login',json={'password':'test-password'},headers=headers)
+    c.post('/api/auth/login',json={'username':'operator','password':'test-password'},headers=headers)
     with c.websocket_connect('wss://robot.test/ws/telemetry',headers=headers) as ws:
         ws.receive_json();ws.send_json({'type':'control','linear':.1})
         for _ in range(10):
@@ -87,7 +93,7 @@ def test_lan_fails_closed_without_explicit_credentials(monkeypatch):
 
 def test_authenticated_stop_from_second_socket_and_cookie_flags(lan):
     c=lan;headers={'origin':'https://robot.test'}
-    response=c.post('/api/auth/login',json={'password':'test-password'},headers=headers)
+    response=c.post('/api/auth/login',json={'username':'operator','password':'test-password'},headers=headers)
     cookie=response.headers['set-cookie'].lower()
     assert 'httponly' in cookie and 'secure' in cookie and 'samesite=strict' in cookie
     with c.websocket_connect('wss://robot.test/ws/telemetry',headers=headers) as a:
@@ -107,15 +113,15 @@ def test_authenticated_stop_from_second_socket_and_cookie_flags(lan):
 
 
 def test_login_rate_limit_and_http_tls_requirement(lan):
-    for _ in range(5):assert lan.post('/api/auth/login',json={'password':'wrong'},headers={'origin':'https://robot.test'}).status_code==401
-    assert lan.post('/api/auth/login',json={'password':'test-password'},headers={'origin':'https://robot.test'}).status_code==429
+    for _ in range(5):assert lan.post('/api/auth/login',json={'username':'operator','password':'wrong'},headers={'origin':'https://robot.test'}).status_code==401
+    assert lan.post('/api/auth/login',json={'username':'operator','password':'test-password'},headers={'origin':'https://robot.test'}).status_code==429
     assert lan.get('http://robot.test/api/health').status_code==403
 
 
 def test_session_expiration_closes_owner_and_rejects_mutations(lan):
     from starlette.websockets import WebSocketDisconnect
     headers={'origin':'https://robot.test'}
-    assert lan.post('/api/auth/login',json={'password':'test-password'},headers=headers).status_code==200
+    assert lan.post('/api/auth/login',json={'username':'operator','password':'test-password'},headers=headers).status_code==200
     csrf=lan.get('/api/auth/session').json()['csrf']
     with lan.websocket_connect('wss://robot.test/ws/telemetry',headers=headers) as ws:
         ws.receive_json();ws.send_json({'type':'control','linear':.1})
@@ -128,7 +134,7 @@ def test_session_expiration_closes_owner_and_rejects_mutations(lan):
             while True:ws.receive_json()
     assert app.state.robot.rpm==[0,0] and app.state.robot.owner is None
     assert lan.post('/api/configuration',json={'type':'configuration','action':'reset_home'},headers={**headers,'x-csrf-token':csrf}).status_code==401
-    assert lan.get('/api/auth/session').json()['role']=='observer'
+    assert lan.get('/api/auth/session').json()['role'] is None
 
 
 def test_backup_and_legacy_schema_preserve_data(tmp_path):

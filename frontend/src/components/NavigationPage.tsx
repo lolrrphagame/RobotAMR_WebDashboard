@@ -254,7 +254,11 @@ export function NavigationPage({
                   Return home
                 </button>
               </div>
-              <button className="navigation-stop" onClick={stop}>
+              <button
+                className="navigation-stop"
+                onClick={stop}
+                disabled={!connected}
+              >
                 <Square size={17} fill="currentColor" />
                 STOP · CANCEL ALL MOTION
               </button>

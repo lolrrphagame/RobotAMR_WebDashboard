@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { refreshAuth } from "../auth";
 import { validateSensorBundle, scanState } from "../sensors";
 import type { SensorBundle, SensorConnection } from "../sensors";
 export function useSensors(enabled: boolean) {
@@ -43,8 +44,12 @@ export function useSensors(enabled: boolean) {
             "Sensor stream unavailable. Robot control uses a separate connection.",
           );
       };
-      ws.onclose = () => {
+      ws.onclose = (event) => {
         if (!disposed) {
+          if (event.code === 1008) {
+            setBundle(null);
+            void refreshAuth().catch(() => {});
+          }
           setConnection("disconnected");
           retry = setTimeout(connect, 2000);
         }

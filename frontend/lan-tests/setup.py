@@ -11,6 +11,7 @@ directory = Path(sys.argv[1]).resolve()
 root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(root / 'backend'))
 from app.security import password_hash
+from app.accounts import AccountStore
 
 
 def openssl(*args):
@@ -87,10 +88,14 @@ finally:
         free_slot(slot)
     assert shutdown() == 0
 
+accounts = AccountStore(directory / 'accounts.json')
+accounts.create('operator', 'operator', password_hash('isolated-browser-password'))
+accounts.create('observer', 'observer', password_hash('isolated-observer-password'))
 config = {
     'APP_MODE': 'lan', 'LAN_HOST': '127.0.0.1', 'LAN_BIND_IP': '127.0.0.1',
     'HTTPS_PORT': '18443', 'BACKEND_PORT': '18001', 'ALLOWED_HOSTS': '127.0.0.1',
     'ALLOWED_ORIGINS': 'https://127.0.0.1:18443', 'OPERATOR_PASSWORD_HASH': password_hash('isolated-browser-password'),
+    'ACCOUNT_STORE_PATH': str(directory / 'accounts.json'),
     'TLS_MODE': 'provided', 'TLS_CERT_FILE': str(directory / 'server.crt'), 'TLS_KEY_FILE': str(directory / 'server.key'),
     'CADDY_BIN': str(root / '.tools/caddy'), 'LAN_STATE_DIR': str(directory / 'runtime'),
     'MISSION_DB_PATH': str(directory / 'missions.sqlite3'), 'ROBOT_CONFIG_PATH': str(directory / 'robot-config.json'),

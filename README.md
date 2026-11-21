@@ -1,10 +1,35 @@
-# PBL4 AMR Mission Control — Phase 5B.1
+# PBL4 AMR Mission Control — Phase 5B.2 · Security Option B
 
 A simulation-only industrial robot dashboard built with React, TypeScript, Vite, Tailwind CSS, Recharts and FastAPI. No ROS, serial, GPIO, camera or motor interfaces are imported or opened. All controls, encoder readings and health values are simulated.
 
+## Secure LAN accounts — Security Option B
+
+**Every LAN user must sign in.** Anonymous visitors see only the login screen and may call minimal health/session endpoints; robot data and both WebSockets require a valid account. Authenticated **Observers** can monitor but cannot change configuration, manage missions, control motion or STOP. Authenticated **Operators** have control privileges; a second Operator can STOP another motion owner. Local loopback development and `./start-dashboard.sh` retain their existing trusted developer behavior.
+
+See **[PHASE5B2_DEPLOYMENT.md](PHASE5B2_DEPLOYMENT.md)** for Caddy HTTPS, certificate trust, private configuration, legacy credential migration, backup and Windows/mobile instructions. New account commands run from `backend/` and prompt for passwords interactively:
+
+```bash
+cd ~/Projects/PBL4_Dashboard/backend
+env -u PYTHONPATH .venv/bin/python -m app.accounts --store "$HOME/.config/pbl4/accounts.json" create alice --role operator
+env -u PYTHONPATH .venv/bin/python -m app.accounts --store "$HOME/.config/pbl4/accounts.json" create viewer --role observer
+```
+
+Set `ACCOUNT_STORE_PATH=/absolute/private/accounts.json` in the existing private `~/.config/pbl4/lan.env`. Do not replace an existing credential setup with new accounts until reviewing the explicit migration procedure. The account store is private, mode 600, outside this repository. There is no registration or account-admin HTTP endpoint.
+
+```bash
+cd ~/Projects/PBL4_Dashboard
+npm --prefix frontend run build
+./start-dashboard-lan.sh --check
+./start-dashboard-lan.sh
+```
+
+Open `https://<configured-LAN-host-or-IP>:8443` only after verifying/installing the configured CA trust. FastAPI stays on `127.0.0.1:8001`, one worker. The separate local launcher remains `./start-dashboard.sh`. No service, firewall or system package is installed automatically. Nothing connects to real hardware.
+
+Security Option B verification: **190 backend tests passed**, including opt-in private-interface HTTPS/WSS staging; **16 development**, **3 local production**, and **4 trusted-HTTPS LAN Playwright tests passed**; the frontend build passed. No final failures or skipped tests in that backend run. Normal pytest without `PBL4_LAN_TEST_IP` reports 189 passed and one explicit private-interface skip. Tests use isolated accounts/certificates/JSON/SQLite, not developer records. Remaining dependency notices: the existing AnyIO deprecation and Vite's empty `react` chunk. Real Windows/mobile trust/access, router/firewall review, long-session load and Raspberry Pi testing remain manual.
+
 ## Phase 5B.1: local production deployment
 
-This entrypoint serves the **built React frontend and the existing FastAPI API/WebSockets on one loopback origin**, without Vite, reload processes, development endpoints or a second simulator. Phase 5A Host/Origin checks, authentication policy, CSRF/session handling, ownership and STOP remain in force. The local operator bypass is still restricted to loopback peers and hosts. **LAN is disabled by this launcher until Phase 5B.2.**
+This entrypoint serves the **built React frontend and the existing FastAPI API/WebSockets on one loopback origin**, without Vite, reload processes, development endpoints or a second simulator. Phase 5A Host/Origin checks, authentication policy, CSRF/session handling, ownership and STOP remain in force. The local operator bypass is still restricted to loopback peers and hosts. **This launcher always refuses LAN mode; use the separate HTTPS LAN launcher.**
 
 ### Install project-local dependencies
 
@@ -82,7 +107,7 @@ On restart, saved Home/waypoints/templates/pending jobs/history remain; robot po
 | Frontend build/index missing | Run the default launcher to rebuild; do not point the server at arbitrary folders |
 | Address already in use | Stop the intended old server or choose `DASHBOARD_PORT`; never kill unrelated processes |
 | Production database lock unavailable | Another production instance may use that database; stop it gracefully. Also check local file permissions |
-| LAN mode rejected | This release intentionally supports local production only; do not bypass it with `0.0.0.0`, forwarding or rewritten hosts |
+| LAN mode rejected | Use the separate `start-dashboard-lan.sh`; never proxy local mode or bypass its checks |
 | Startup/database failure | Read the terminal error, preserve saved files, verify storage/permissions and restore from a verified backup if necessary |
 | Refresh/asset error after source update | Stop, rebuild and restart; reload the browser to obtain matching hashed assets |
 
@@ -100,13 +125,14 @@ npm --prefix frontend run test:e2e
 npm --prefix frontend run test:production
 ```
 
-Final results: **132 backend tests passed**, **15 development Playwright tests passed**, **3 production Playwright tests passed**, and the production build passed. One upstream AnyIO deprecation warning remains. Production tests use port 18173 with fresh temporary JSON/SQLite paths; development browser tests use 15173/18000 with memory-only data. Keep these test ports available. Tests cover static asset isolation, Host/Origin rejection, real process startup/SIGTERM/restart, persistence, same-origin control/sensor sockets, STOP/disconnect, refresh, and prevention of duplicate mission execution.
+Historical Phase 5B.1 results: **132 backend tests passed**, **15 development Playwright tests passed**, **3 production Playwright tests passed**, and the production build passed. One upstream AnyIO deprecation warning remains. Production tests use port 18173 with fresh temporary JSON/SQLite paths; development browser tests use 15173/18000 with memory-only data. Keep these test ports available. Tests cover static asset isolation, Host/Origin rejection, real process startup/SIGTERM/restart, persistence, same-origin control/sensor sockets, STOP/disconnect, refresh, and prevention of duplicate mission execution.
 
 Development remains the original two-server Vite/backend workflow below, including developer API docs. Production is **one process/one origin**, built assets only, no Vite proxy/server and no API docs. Production serving does not change the simulation engine, virtual sensor defaults, mission execution logic or hardware boundaries.
 
-### Phase 5B.2 prerequisites and limits
+### Local versus LAN deployment
 
-This is local production-style hosting, not LAN deployment, a system service, or high availability. No TLS, remote operator provisioning, restart supervisor, firewall rule or system package is installed. Phase 5B.2 must provide trusted HTTPS/static hosting or a reviewed proxy topology, strict Host/Origin/proxy configuration, private credentials, Windows/LAN browser tests, backup/restore drills, service supervision and Pi 4 performance measurements. Phase 5A LAN authentication code is preserved for that work, but **`start-dashboard.sh` and its production factory refuse LAN mode today**. Hardware remains disabled throughout.
+The local launcher remains loopback-only. The separate Phase 5B.2 launcher provides Caddy HTTPS/WSS and authenticated roles, preserving the single authoritative simulator. Neither launcher installs a service or configures network/firewall trust. See [the deployment guide](PHASE5B2_DEPLOYMENT.md) for private accounts, exact configuration, manual certificate setup and future Pi limitations.
+
 
 ## Phase 5A security and reliability
 
@@ -116,43 +142,15 @@ See **[PHASE5A_AUDIT.md](PHASE5A_AUDIT.md)** for severity-ranked findings and re
 
 The existing two-terminal run commands below remain valid. `APP_MODE=local` permits control **only when both the peer and Host are loopback**. Default hosts are localhost/127.0.0.1 (plus the test-only `testserver` name). A non-loopback peer or LAN Host is rejected, even if Uvicorn is accidentally bound to all interfaces. Do not forward a public/LAN reverse proxy to local mode or rewrite remote traffic to appear local. Vite development/preview must stay on 127.0.0.1. This local bypass trusts programs on your own workstation; it is not an account login.
 
-### Explicit LAN operator sessions
+### Authenticated LAN Operator and Observer sessions
 
-The following Phase 5A LAN protocol is retained for future Phase 5B.2 testing, not enabled by the Phase 5B.1 production launcher. LAN mode is opt-in and requires **HTTPS/WSS**, explicit origins and hosts, and an operator password hash. Anonymous observers may read monitoring data on this explicitly enabled private LAN service; **all HTTP mutations and control WebSocket messages require the shared operator login**. This design protects control/configuration, not monitoring-data confidentiality. If anonymous observation is unacceptable, restrict the entire site at the TLS proxy as a Phase 5B deployment policy.
+Security Option B supersedes the earlier anonymous-observer/shared-password model. Every LAN monitoring endpoint and both WebSockets now require a valid server-side user session. Unknown/expired/revoked sessions get HTTP 401 or a rejected socket; authenticated Observers attempting mutations get HTTP 403. Only Operators may send any control message, including STOP. Account roles are read from the private store, never accepted from the browser.
 
-Generate a password hash interactively, outside the repository (no password appears in shell arguments):
+Use the private host-administrator `app.accounts` CLI to create accounts, list usernames/roles, disable users, reset passwords, change roles and revoke sessions. No signup or HTTP account-administration API exists. Existing `OPERATOR_PASSWORD_HASH` configuration is preserved for **explicit migration**, not used as a login fallback. Migration instructions and exact CLI commands are in [PHASE5B2_DEPLOYMENT.md](PHASE5B2_DEPLOYMENT.md).
 
-```bash
-mkdir -p ~/.config/pbl4
-chmod 700 ~/.config/pbl4
-cd ~/Projects/PBL4_Dashboard/backend
-(umask 077; env -u PYTHONPATH .venv/bin/python -m app.security > ~/.config/pbl4/operator.env)
-```
+New/reset passwords use salted scrypt (N=32768, r=8, p=3); imported legacy hashes remain valid until explicitly reset. Sessions are opaque random IDs, stored server-side in memory (max 128), expire after eight hours, and disappear on restart. Cookies remain Secure, HttpOnly, SameSite=Strict. Logout and any account revision revoke matching access; active telemetry/sensor sockets check current session validity before publishing. Owner revocation stops or pauses motion through the existing disconnect logic, with no automatic resume. The login boundary unmounts private views and clears their in-memory data after logout or authentication loss.
 
-Then edit that private file to add, using your actual TLS hostname:
-
-```dotenv
-APP_MODE=lan
-ALLOWED_HOSTS=robot.example.lan
-ALLOWED_ORIGINS=https://robot.example.lan
-# OPERATOR_PASSWORD_HASH=<the generated salt:scrypt-hash line already in this file>
-```
-
-Do not place this file in the frontend, commit it, paste credentials into URLs, or use a VITE-prefixed variable for credentials. LAN startup fails closed if required configuration is missing or origins are not explicit HTTPS origins. The operator secret is a salted scrypt hash; sessions are random opaque IDs, stored server-side in memory (max 128), expire after eight hours, and disappear on restart. Cookies are Secure, HttpOnly, SameSite=Strict and scoped to `/`. Login rotates the session identifier. Logout revokes the current session; its control sockets close and release/pause owned motion. Another authenticated operator tab can issue STOP even if it does not own motion.
-
-Launch behind a **trusted loopback TLS reverse proxy**, not a directly exposed backend:
-
-```bash
-cd ~/Projects/PBL4_Dashboard/backend
-env -u PYTHONPATH .venv/bin/python -m uvicorn app.main:app \
-  --env-file ~/.config/pbl4/operator.env --host 127.0.0.1 --port 8000 \
-  --proxy-headers --forwarded-allow-ips 127.0.0.1 \
-  --ws-max-size 4096 --ws-ping-interval 20 --ws-ping-timeout 20
-```
-
-Phase 5B must serve `frontend/dist` and proxy `/api` and `/ws` under the same HTTPS origin, preserve the original Host/Origin, set forwarded scheme/client headers itself, and support WebSocket upgrades. Trust forwarded headers only from that proxy; never use `--forwarded-allow-ips '*'`. TLS/proxy installation is not performed by this phase. Direct HTTP LAN requests are rejected. Vite is a development server, not the LAN production server.
-
-HTTP mutation requests need an allowed Origin and `X-CSRF-Token`, obtained from `GET /api/auth/session` after login. The frontend keeps CSRF state only in memory and sends the HttpOnly cookie automatically. WebSockets validate Origin and authenticate the cookie; observers cannot promote an existing socket to a controller (login reload creates a new connection). Missing/malformed commands are rejected without changing an existing owner's mission. Expired/revoked sessions close control sockets. Native LAN WebSocket clients must also send an allowed Origin.
+HTTP mutations, including Observer logout, require an allowed Origin and `X-CSRF-Token` from `/api/auth/session`. Login requires an allowed Origin; clients send username/password over trusted HTTPS. Control sockets require an allowed Origin and a valid Operator cookie; Observer sockets are strictly read-only. Native clients need these same headers and cookies. Always use the reviewed Caddy launcher, never a publicly bound Uvicorn or wildcard forwarded-header trust.
 
 ### Configuration and limits
 
@@ -161,7 +159,8 @@ HTTP mutation requests need an allowed Origin and `X-CSRF-Token`, obtained from 
 | `APP_MODE` | `local`; `lan` explicitly enables authenticated HTTPS deployment |
 | `ALLOWED_HOSTS` | Loopback/test defaults locally; explicit comma-separated DNS/IP hostnames in LAN mode, no wildcard |
 | `ALLOWED_ORIGINS` | Local Vite origins; explicit HTTPS origins in LAN mode |
-| `OPERATOR_PASSWORD_HASH` | Private salted scrypt hash, required only for LAN |
+| `ACCOUNT_STORE_PATH` | Required for LAN; owned private account JSON outside the repository, mode 600 |
+| `OPERATOR_PASSWORD_HASH` | Optional retained legacy hash for explicit migration only; never an authentication fallback |
 | `ROBOT_CONFIG_PATH` | Existing JSON configuration path (unchanged) |
 | `MISSION_DB_PATH` | Existing SQLite path (unchanged) |
 | `VITE_PROXY_TARGET` | Development API proxy target only; never credentials |
@@ -487,7 +486,7 @@ All motion command handling remains in memory; only Home and waypoint configurat
 - Home clearance is validated when creating the simulator. HTTP/WebSocket telemetry includes `clearance.pose_clear` and `clearance.radius`; **Diagnostics** shows current pose clearance. Error messages distinguish an obstructed robot pose from an invalid destination.
 - A stale telemetry stream is closed after approximately two seconds; reconnection starts with no pending drive command.
 - The input envelope accepts ±0.6 m/s and ±2.0 rad/s, then **proportionally scales both wheel targets** to enforce ±40 RPM even for combined linear/angular commands. This preserves commanded curvature. The maximum straight speed is about **0.1822 m/s**; UI sliders use 0.02–0.18 m/s and 0.2–1.2 rad/s. Non-finite values, unknown commands and extra fields are rejected.
-- One WebSocket client can own motion at a time. Other clients can observe; any connected client may issue STOP. This is a simulation application with Phase 5A LAN operator authorization, not a hardware safety system.
+- One WebSocket client can own motion at a time. Authenticated Observers can monitor; only authenticated Operators may issue STOP (local trusted controls remain available). This is a simulation application with Phase 5A LAN operator authorization, not a hardware safety system.
 
 ## HTTP and WebSocket API
 

@@ -16,7 +16,7 @@ PRIVATE_NETWORKS = tuple(ipaddress.ip_network(n) for n in
 KEYS = {'APP_MODE', 'LAN_HOST', 'LAN_BIND_IP', 'HTTPS_PORT', 'BACKEND_PORT',
         'ALLOWED_HOSTS', 'ALLOWED_ORIGINS', 'OPERATOR_PASSWORD_HASH', 'TLS_MODE',
         'TLS_CERT_FILE', 'TLS_KEY_FILE', 'CADDY_BIN', 'LAN_STATE_DIR',
-        'MISSION_DB_PATH', 'ROBOT_CONFIG_PATH'}
+        'MISSION_DB_PATH', 'ROBOT_CONFIG_PATH', 'ACCOUNT_STORE_PATH'}
 
 
 def outside_repository(path):
@@ -93,15 +93,11 @@ class LanConfig:
             raise ValueError('HTTPS_PORT and BACKEND_PORT must differ')
         if values.get('ALLOWED_HOSTS') != host or values.get('ALLOWED_ORIGINS') != f'https://{host}:{https}':
             raise ValueError('ALLOWED_HOSTS must equal LAN_HOST; ALLOWED_ORIGINS must equal https://LAN_HOST:HTTPS_PORT')
-        # Validate the existing security model without mutating the process environment.
-        from .security import password_hash
-        try:
-            salt, digest = values['OPERATOR_PASSWORD_HASH'].split(':')
-            if len(bytes.fromhex(salt)) < 16 or len(bytes.fromhex(digest)) != 64 or len(digest) != 128:
-                raise ValueError()
-            password_hash('configuration-validation', salt)
-        except (KeyError, ValueError):
-            raise ValueError('OPERATOR_PASSWORD_HASH must be a valid Phase 5A scrypt hash') from None
+        from .accounts import AccountStore
+        if not values.get('ACCOUNT_STORE_PATH'):
+            raise ValueError('ACCOUNT_STORE_PATH is required. Create accounts or explicitly migrate the legacy hash using app.accounts; existing credentials are not deleted.')
+        values['ACCOUNT_STORE_PATH'] = str(private_file(values['ACCOUNT_STORE_PATH']))
+        AccountStore(values['ACCOUNT_STORE_PATH']).load()
         mode = values.get('TLS_MODE', 'internal')
         if mode not in ('internal', 'provided'):
             raise ValueError('TLS_MODE must be internal or provided')
@@ -131,7 +127,7 @@ class LanConfig:
         env = {k: v for k, v in os.environ.items() if k not in KEYS and k != 'PYTHONPATH'}
         env.update({k: v for k, v in self.values.items() if k in
                     {'APP_MODE', 'ALLOWED_HOSTS', 'ALLOWED_ORIGINS', 'OPERATOR_PASSWORD_HASH',
-                     'MISSION_DB_PATH', 'ROBOT_CONFIG_PATH'}})
+                     'MISSION_DB_PATH', 'ROBOT_CONFIG_PATH', 'ACCOUNT_STORE_PATH'}})
         return env
 
     def caddyfile(self):

@@ -1,4 +1,4 @@
-"""Single-operator LAN sessions. Default bypass is strictly loopback-only."""
+"""Authenticated LAN roles; trusted local bypass remains strictly loopback-only."""
 import hashlib
 import hmac
 import ipaddress
@@ -7,6 +7,7 @@ import os
 import secrets
 import time
 from collections import OrderedDict
+from .accounts import AccountStore, username, verify_password
 
 COOKIE='pbl4_session'
 
@@ -23,11 +24,12 @@ class Security:
         self.origins=[s.strip() for s in os.getenv('ALLOWED_ORIGINS','http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:4173,http://localhost:4173').split(',')]
         self.hosts=[s.strip().lower() for s in os.getenv('ALLOWED_HOSTS','localhost,127.0.0.1,testserver').split(',')]
         self.hash=os.getenv('OPERATOR_PASSWORD_HASH','')
+        self.accounts=None
         if self.lan:
-            if not self.hash or not os.getenv('ALLOWED_HOSTS') or not os.getenv('ALLOWED_ORIGINS'):raise ValueError('LAN requires OPERATOR_PASSWORD_HASH, ALLOWED_HOSTS and ALLOWED_ORIGINS')
-            salt,digest=self.hash.split(':')
-            if len(bytes.fromhex(salt))<16 or len(bytes.fromhex(digest))!=64:raise ValueError('Invalid scrypt hash format')
-            if len(digest)!=128 or '*' in ','.join(self.hosts+self.origins) or any(not s.startswith('https://') for s in self.origins):raise ValueError('LAN requires explicit HTTPS origins, hosts and a scrypt password hash')
+            if not os.getenv('ACCOUNT_STORE_PATH') or not os.getenv('ALLOWED_HOSTS') or not os.getenv('ALLOWED_ORIGINS'):raise ValueError('LAN requires ACCOUNT_STORE_PATH, ALLOWED_HOSTS and ALLOWED_ORIGINS; migrate legacy credentials with app.accounts')
+            if '*' in ','.join(self.hosts+self.origins) or any(not s.startswith('https://') for s in self.origins):raise ValueError('LAN requires explicit HTTPS origins and hosts')
+            self.accounts=AccountStore(os.environ['ACCOUNT_STORE_PATH'])
+            self.accounts.load()
         self.sessions={};self.buckets=OrderedDict();self.connections=0
 
     def local(self,scope):
@@ -40,11 +42,20 @@ class Security:
 
     def session(self,cookies):
         token=cookies.get(COOKIE,'');value=self.sessions.get(token)
-        if value and value['expires']>time.monotonic():return value
+        if value and value['expires']>time.monotonic():
+            try:
+                user=self.accounts.load().get(value['username']) if self.accounts else None
+                if user and user['enabled'] and user['revision']==value['revision'] and user['role']==value['role']:return value
+            except (OSError,ValueError,KeyError,TypeError):pass  # Fail closed if private accounts become unavailable.
         self.sessions.pop(token,None)
         return None
 
-    def operator(self,connection):return self.local(connection.scope) or self.session(connection.cookies) is not None
+    def authenticated(self,connection):return self.local(connection.scope) or self.session(connection.cookies) is not None
+
+    def operator(self,connection):
+        if self.local(connection.scope):return True
+        session=self.session(connection.cookies)
+        return session is not None and session['role']=='operator'
 
     def rate(self,key,limit,period=60):
         now=time.monotonic();start,count=self.buckets.get(key,(now,0))
@@ -53,14 +64,19 @@ class Security:
         while len(self.buckets)>1024:self.buckets.popitem(last=False)
         return count<limit
 
-    def login(self,password):
-        try:valid=hmac.compare_digest(password_hash(password,self.hash.split(':')[0]),self.hash)
-        except (ValueError,IndexError):valid=False
-        if not valid:return None
+    def login(self,name,password):
+        try:
+            name=username(name)
+            user=self.accounts.load().get(name) if self.accounts else None
+        except (ValueError,OSError,TypeError):user=None
+        dummy='scrypt$32768$8$3$'+'00'*16+'$'+'00'*64
+        valid=verify_password(password,user['password_hash'] if user else dummy)
+        if not valid or not user or not user['enabled']:return None
         now=time.monotonic()
         self.sessions={k:v for k,v in self.sessions.items() if v['expires']>now}
         if len(self.sessions)>=128:self.sessions.pop(next(iter(self.sessions)))
-        token=secrets.token_urlsafe(32);self.sessions[token]={'csrf':secrets.token_urlsafe(24),'expires':now+8*3600}
+        token=secrets.token_urlsafe(32);self.sessions[token]={'csrf':secrets.token_urlsafe(24),'expires':now+8*3600,
+            'username':name,'role':user['role'],'revision':user['revision']}
         return token
 
 
@@ -88,20 +104,32 @@ class SecurityMiddleware:
         if host not in security.hosts:return await reject(400,'Host is not allowed')
         if not security.lan and not security.local(scope):return await reject(403,'Non-loopback access requires explicit LAN configuration')
         if origin and origin not in security.origins:return await reject(403,'Origin is not allowed')
+        from starlette.requests import HTTPConnection
+        connection=HTTPConnection(scope)
         if scope['type']=='websocket':
             if security.lan and not origin:return await reject(403,'WebSocket Origin required')
+            if security.lan and not security.authenticated(connection):return await reject(401,'Authentication required')
             if security.connections>=64:return await reject(429,'Connection capacity reached')
             security.connections+=1
             try:return await self.app(scope,receive,send)
             finally:security.connections-=1
         from starlette.requests import Request
         request=Request(scope)
+        if security.lan:
+            from .production import PAGES
+            public_read=scope['method'] in ('GET','HEAD') and (scope['path'] in
+                ('/','/login','/api/health','/api/auth/session',*('/'+p for p in PAGES)) or scope['path'].startswith('/assets/'))
+            public_login=scope['path']=='/api/auth/login' and scope['method']=='POST'
+            if not public_read and not public_login and not security.authenticated(request):return await reject(401,'Authentication required')
+            if public_login and origin not in security.origins:return await reject(403,'Allowed Origin required for login')
         if scope['method'] not in ('GET','HEAD','OPTIONS'):
             if not security.rate(('http',scope.get('client',('',))[0]),120):return await reject(429,'Mutation rate exceeded')
             if scope['path']!='/api/auth/login':
-                if not security.operator(request):return await reject(401,'Operator authentication required')
+                if not security.authenticated(request):return await reject(401,'Authentication required')
+                if scope['path']!='/api/auth/logout' and not security.operator(request):return await reject(403,'Operator role required')
                 if not security.local(scope):
                     session=security.session(request.cookies)
+                    if not session:return await reject(401,'Authentication expired or revoked')
                     if origin not in security.origins or not hmac.compare_digest(headers.get(b'x-csrf-token',b'').decode(),session['csrf']):return await reject(403,'CSRF token and allowed Origin required')
             # Buffer at most 32 KiB, including chunked requests, before validation.
             body=b''

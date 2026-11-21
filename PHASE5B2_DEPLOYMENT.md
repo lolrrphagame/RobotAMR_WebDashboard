@@ -1,4 +1,4 @@
-# Phase 5B.2 — private-LAN HTTPS deployment
+# Phase 5B.2 — private-LAN HTTPS · authenticated Operator/Observer
 
 Simulation only. No ROS 2, serial, GPIO, motor, LiDAR or camera adapter is enabled by deployment. The simulator, saved data formats, ownership rules and STOP behavior are unchanged. This is a foreground, single-host deployment, not a public Internet service or a hardware safety system.
 
@@ -86,7 +86,8 @@ Edit `~/.config/pbl4/lan.env` privately. The supplied `192.168.1.100` and `YOUR_
 | `BACKEND_PORT` | Default 8001; a different non-privileged port, always bound to 127.0.0.1 |
 | `ALLOWED_HOSTS` | Exactly `LAN_HOST`, without a port, no aliases/wildcards |
 | `ALLOWED_ORIGINS` | Exactly `https://LAN_HOST:HTTPS_PORT`, no trailing slash |
-| `OPERATOR_PASSWORD_HASH` | Phase 5A scrypt output; no plaintext password |
+| `ACCOUNT_STORE_PATH` | Required absolute private account JSON path outside the repository, mode 600 |
+| `OPERATOR_PASSWORD_HASH` | Optional preserved legacy hash for explicit migration only; ignored for account login |
 | `CADDY_BIN` | Approved executable path, normally `<checkout>/.tools/caddy` |
 | `LAN_STATE_DIR` | Absolute private directory for generated proxy config, CA and certificate state |
 | `TLS_MODE` | `internal` or `provided` |
@@ -94,14 +95,51 @@ Edit `~/.config/pbl4/lan.env` privately. The supplied `192.168.1.100` and `YOUR_
 
 For a hostname such as `amr.home.arpa`, arrange your private router/DNS to resolve that name **only to `LAN_BIND_IP`**, on the server and every client. Local server-only hosts entries do not configure mobile clients. Using the explicit private IP is simpler for initial testing. There is no automatic mDNS/DNS configuration. Prefer a DHCP reservation; changing addresses requires configuration/certificate review. IPv6 access is intentionally unsupported in this phase.
 
-Generate a long, unique operator password interactively:
+### First Operator and additional users
+
+Accounts represent people, not IP addresses. Provision them on the trusted Ubuntu host using the administrator CLI; there is no public registration or account-administration endpoint. Passwords are entered twice using a non-echoing interactive prompt and never passed on the command line. Usernames contain 1–64 letters, digits, dots, underscores or hyphens and are case-insensitive (stored lowercase). Roles are `operator` and `observer`; account capacity is 128.
+
+For a **new** deployment:
 
 ```bash
 cd ~/Projects/PBL4_Dashboard/backend
-env -u PYTHONPATH .venv/bin/python -m app.security
+env -u PYTHONPATH .venv/bin/python -m app.accounts --store "$HOME/.config/pbl4/accounts.json" create alice --role operator
+env -u PYTHONPATH .venv/bin/python -m app.accounts --store "$HOME/.config/pbl4/accounts.json" create viewer --role observer
 ```
 
-This prompts without echoing your password, requires at least 12 characters and prints `OPERATOR_PASSWORD_HASH=...`. Replace the one placeholder hash line in the private file with that output. Do not paste passwords/hashes into source files, frontend variables, issue reports or Git. The LAN launcher does not accept credentials as CLI arguments. A change to the hash takes effect on restart and invalidates the in-memory sessions.
+Add `ACCOUNT_STORE_PATH=/home/YOUR_USER/.config/pbl4/accounts.json` to your private LAN env using the actual absolute path. The CLI creates the account file atomically with mode 600 and uses an advisory lock for concurrent administrator edits. The launcher requires an existing valid store and does not silently create accounts. Accounts/secrets may not be stored inside the repository, frontend assets or environment variables prefixed with `VITE_`.
+
+New/reset hashes use salted scrypt N=32768, r=8, p=3, a 32 MiB work factor from [OWASP's supported scrypt settings](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#scrypt). Password length is 12–256 characters. No plaintext passwords are stored. Private JSON includes hashes, roles, enabled flags and random revision identifiers; it contains no session tokens. Keep the containing directory private. The API never returns hashes or other users' account records.
+
+### Migration from the previous shared Operator password
+
+Back up the existing private env first. Do **not** remove or replace `OPERATOR_PASSWORD_HASH`. Import that exact existing hash into an explicitly named Operator account:
+
+```bash
+cd ~/Projects/PBL4_Dashboard/backend
+env -u PYTHONPATH .venv/bin/python -m app.accounts --store "$HOME/.config/pbl4/accounts.json" migrate-legacy operator --config "$HOME/.config/pbl4/lan.env"
+```
+
+If the old hash is in `operator.env`, supply that private file instead. The command reads but never modifies the old file, imports its hash unchanged and refuses to overwrite an existing username. The existing password now works with username `operator`. Add `ACCOUNT_STORE_PATH` to the LAN env; retain its old hash line for backup/migration records. The old environment hash **does not enable a fallback account**. Missing account configuration fails closed with migration guidance. Never test a migration against developer secrets or replace existing accounts during automated tests.
+
+Imported legacy scrypt hashes keep their original work factor for compatibility. After confirming account access, an explicit `reset-password` upgrades that account to the stronger new settings. This requires an administrator choosing a new password; no credential is silently deleted or changed. A backend restart requires all users to log in again and never resumes motion.
+
+### Disable, reset, change role and revoke
+
+Run from `backend/` (all commands preserve other users and simulator data):
+
+```bash
+env -u PYTHONPATH .venv/bin/python -m app.accounts --store "$HOME/.config/pbl4/accounts.json" list
+env -u PYTHONPATH .venv/bin/python -m app.accounts --store "$HOME/.config/pbl4/accounts.json" disable viewer
+env -u PYTHONPATH .venv/bin/python -m app.accounts --store "$HOME/.config/pbl4/accounts.json" enable viewer
+env -u PYTHONPATH .venv/bin/python -m app.accounts --store "$HOME/.config/pbl4/accounts.json" reset-password alice
+env -u PYTHONPATH .venv/bin/python -m app.accounts --store "$HOME/.config/pbl4/accounts.json" set-role viewer observer
+env -u PYTHONPATH .venv/bin/python -m app.accounts --store "$HOME/.config/pbl4/accounts.json" revoke alice
+```
+
+`list` prints only username/role/enabled state. Reset prompts interactively. Disable, enable, password reset, role change and revoke rotate that user's revision; active sessions lose access without restarting the service. Read/command requests check the account on each use; open telemetry and sensor streams recheck before publishing (approximately 0.1/0.2 seconds). Existing owner-disconnect logic stops manual motion or pauses navigation/operations. Revocation does not automatically resume anything. Re-enabling a user requires a fresh login. Other users' sessions remain valid.
+
+Only the trusted host administrator can run this CLI through filesystem access. An Operator's dashboard privileges do not imply account-administration rights. If every Operator is disabled, recover through this CLI; there is no anonymous recovery endpoint. No account deletion command is provided.
 
 Do not `source` this file into a shell. The launcher intentionally ignores inherited security/data settings and uses only the validated file, with saved-data defaults when the optional paths are omitted.
 
@@ -169,7 +207,7 @@ cd ~/Projects/PBL4_Dashboard/backend
 env -u PYTHONPATH .venv/bin/python -m app.backup --help
 ```
 
-Use the helper's documented source paths if overridden; it backs up SQLite consistently with WAL state and copies saved JSON. For a full host migration, additionally back up the private env and Caddy CA/state separately into protected storage. Treat those backups as secrets. To restore, stop all processes, keep a copy of the current files, restore a matched JSON/database snapshot to the configured paths, verify `PRAGMA integrity_check`, confirm file ownership, then start and review saved state before issuing commands. Do not copy just a running database file and discard its WAL. Never overwrite developer data for a smoke test.
+Use the helper's documented source paths if overridden; it backs up SQLite consistently with WAL state and copies saved JSON. For a full host migration, additionally back up the private env, **account JSON** and Caddy CA/state separately into protected storage. The account file is replaced atomically; a private file copy is a complete revision, but coordinate administrator edits during backup. The simulator backup helper does not include accounts or TLS keys. Preserve mode 600 on the account file and mode 700 on secret directories; never export them with dashboard CSVs. Restore accounts only with the backend stopped so old in-memory sessions cannot survive a restored revision. Treat those backups as secrets. To restore, stop all processes, keep a copy of the current files, restore a matched JSON/database snapshot to the configured paths, verify `PRAGMA integrity_check`, confirm file ownership, then start and review saved state before issuing commands. Do not copy just a running database file and discard its WAL. Never overwrite developer data for a smoke test.
 
 ### Health, access and permissions
 
@@ -181,11 +219,28 @@ curl --fail --show-error \
   https://YOUR_CONFIGURED_LAN_HOST:8443/api/health
 ```
 
-Expected: `status=ok`, `simulation=true`, `hardware_enabled=false`. `/api/auth/session` initially reports `mode=lan`, `role=observer`. No login is required to read telemetry, sensor simulation, maps, mission history or health on the allowed private network; do not store sensitive data under an expectation of per-observer authorization.
+Expected: `status=ok`, `simulation=true`, `hardware_enabled=false`. Anonymous `/api/auth/session` reports `mode=lan`, `authenticated=false`, `role=null`, `username=null`, and an empty CSRF token. This minimal endpoint and health remain public infrastructure endpoints; neither exposes robot state.
 
-Enter the private operator password in the existing Dashboard sign-in form. Cookies are opaque, Secure, HttpOnly and SameSite=Strict. Sessions expire after eight hours and are revoked by logout/restart; operator-owned sockets close and the existing disconnect safety clears/pauses motion. Mutating HTTP requests require an authenticated session, allowed Origin and session CSRF token. WebSocket handshakes require an allowed Origin; control requires a still-valid operator session, while observers can receive read-only streams. A valid operator on a separate connection/session can STOP another owner's simulated motion. STOP does not authorize observers or bypass Host/Origin validation. Existing rate/capacity limits are retained; proxy clients cannot evade login limits by forging forwarding headers.
+**All LAN users must authenticate.** Anonymous visitors receive only the login page and required static assets. Requests for robot state, map, configuration, events, diagnostics, sensor data, mission queue/history/analytics and any future non-public endpoint return 401. Both WebSockets reject unauthenticated handshakes before sending a frame. Static HTML for known SPA routes contains no private telemetry and displays the dedicated login screen until authentication succeeds.
+
+Sign in using the individually provisioned username/password over trusted HTTPS from Windows, Ubuntu or mobile. The header shows the authenticated username and either **Authorized operator** or **Read-only observer**, with Sign out for both roles. No dashboard view is mounted behind the login form.
+
+| Identity | Monitoring / read-only sockets | Mutations / motion / mission control / STOP | Account administration |
+| --- | --- | --- | --- |
+| Anonymous | Denied (401 / rejected handshake) | Denied (401) | Denied |
+| Authenticated Observer | Allowed | Denied (403 / socket control rejected) | Denied |
+| Authenticated Operator | Allowed | Allowed with session/CSRF/ownership checks | Host-administrator CLI only |
+
+Observers can view all monitoring pages and history. Manual controls, Home/waypoint/settings changes, queue editing/execution and STOP are disabled for Observers in the UI and independently denied by the backend. The server takes roles from the private store, never a browser-supplied role. One Operator owns motion at a time; a second independently authenticated Operator may STOP that owner. STOP remains an application simulation control, not a physical emergency stop.
+
+Cookies remain opaque, Secure, HttpOnly and SameSite=Strict. Sessions expire after eight hours and are revoked by logout/restart or an account revision change. Both roles' sensitive sockets close on expiration/revocation, and any owner is stopped/paused through the original disconnect logic. HTTP mutations, including Observer logout, require an allowed Origin and the session CSRF token. Login requires an allowed Origin. Session status returns only the requesting user's username/role/CSRF, never a token or account list.
+
+The frontend authentication boundary unmounts all private components, closes sockets and clears private in-memory view state on sign-out/authentication loss, so cached telemetry is not shown behind the login screen. Sensitive HTTP responses remain `Cache-Control: no-store`. A restored browser page revalidates its session before mounting private views. There is no automatic motion resume. When a network failure prevents confirmation of server logout, the browser still clears its private UI and reports the failed revocation; reconnect and sign in to complete logout, or use the host CLI to revoke that account's sessions.
+
 
 ## Verification and troubleshooting
+
+Security Option B verification on 2026-11-21: baseline 160 backend tests passed with one opt-in network skip. Final verification passed **190 backend tests**, including the opt-in same-laptop private-interface test; **16 development**, **3 local-production**, and **4 trusted-HTTPS LAN Playwright tests**, plus the production build. No final test failures/skips in the opt-in backend run. Without a configured private-interface address the backend suite reports 189 passed / one explicit skip. Existing AnyIO deprecation and Vite empty-`react`-chunk notices remain. These results do not certify remote-device trust, firewall/router behavior or Pi performance.
 
 Automated tests use temporary certificates, configuration and databases, never the user's saved records. Run from the repository:
 
@@ -225,7 +280,7 @@ This uses random ephemeral credentials and temporary saved files, verifies trust
 
 Upstream keepalive is disabled on the loopback proxy hop because reconnect stress testing exposed stale connection reuse with the tested Caddy/Uvicorn combination. Dial/header waits are bounded. This does not disable browser HTTPS keepalive or established WSS streams; it trades small per-request local connection overhead for reliable upgrades.
 
-Manual acceptance still required: verified root import on actual Windows/Ubuntu/mobile browsers, cross-device HTTPS/WSS login/STOP/logout, private DNS/DHCP stability, backend-port refusal from another device, firewall/router exposure review (including no port forwarding), wireless disconnect/reconnect behavior, clock/certificate renewal checks, backup/restore drill, and long-duration load/performance testing. No claim is made that those external-device checks were automated.
+Manual acceptance still required: verified root import on actual Windows/Ubuntu/mobile browsers, cross-device HTTPS/WSS Operator and Observer login/logout, Observer denial of STOP, independent-Operator STOP, live account disable/revoke, private DNS/DHCP stability, backend-port refusal from another device, firewall/router exposure review (including no port forwarding), wireless disconnect/reconnect behavior, clock/certificate renewal checks, backup/restore drill, and long-duration load/performance testing. No claim is made that those external-device checks were automated.
 
 ## Future Raspberry Pi 4 readiness and limits
 
@@ -236,3 +291,9 @@ Build assets on the Pi using Node 24, or build from the same lockfile/source els
 Give the Pi a stable private address/name, provision its own protected configuration/certificates, transfer data only after SQLite-aware backup and shutdown, verify integrity and test STOP before regular use. Watch actual host CPU/RAM/storage using `ps`, `top`, `free -h` and `df -h`; the Dashboard's health charts are **simulated**, not Pi measurements. Review SD-card durability, WAL growth/backups and free space. Measure under realistic simultaneous clients before claiming Pi performance.
 
 There was **no deployment to or access of the real Pi**. ARM64 performance, physical-network/mobile behavior, unattended operation and hardware ROS/UART/camera integration are not certified by this phase. The current localhost/private-interface tests establish software readiness for a later supervised Pi simulation deployment, not production-grade robotics safety or Internet readiness.
+
+## Isolated manual role staging
+
+To verify the two login roles before opening a private interface, prepare a separate private env with `LAN_HOST=127.0.0.1`, `LAN_BIND_IP=127.0.0.1`, `ALLOWED_HOSTS=127.0.0.1`, and `ALLOWED_ORIGINS=https://127.0.0.1:8443`. Give it **separate absolute temporary** account, robot JSON, mission SQLite and proxy-state paths. Create temporary Operator/Observer accounts using the CLI, build the frontend, then run `./start-dashboard-lan.sh --config /absolute/private/staging.env`. Verify/trust its temporary public root in a test browser profile; do not weaken TLS. This uses real LAN-mode authorization on loopback without opening a private-network listener. Do not copy over or point staging at existing saved data. Stop the supervisor before removing staging files or test-profile trust.
+
+Check: anonymous navigation displays only login; Observer sees telemetry/maps/history but every control and STOP is unavailable; Operator controls work; page refresh preserves a valid login; logout or CLI disable/revoke clears all private views and closes streams; owner revocation halts/pauses simulated motion; reconnect/restart never resumes it. Review the exact host/origin again before switching to the real private interface. Cross-device trust and network verification remain manual.

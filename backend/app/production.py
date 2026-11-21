@@ -47,7 +47,7 @@ def _serve_production_assets():
         return FileResponse(candidate)
 
     app.add_api_route('/', index, methods=['GET', 'HEAD'], include_in_schema=False)
-    for page in PAGES:
+    for page in (*PAGES, 'login'):
         app.add_api_route('/' + page, index, methods=['GET', 'HEAD'], include_in_schema=False)
     app.add_api_route('/assets/{path:path}', asset, methods=['GET', 'HEAD'], include_in_schema=False)
     app.state.production_routes_added = True
