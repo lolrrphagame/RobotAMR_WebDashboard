@@ -431,11 +431,19 @@ export function MissionAnalytics({ analytics: a }: { analytics: Analytics }) {
           <div className="health-history-chart">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={a.trends}>
-                <CartesianGrid stroke="#263b50" />
-                <XAxis dataKey="date" stroke="#8ba8c1" />
-                <YAxis allowDecimals={false} stroke="#8ba8c1" />
-                <Tooltip contentStyle={{ background: "#10243a" }} />
-                <Bar dataKey="missions" fill="#36c9dd" />
+                <CartesianGrid stroke="var(--chart-grid)" />
+                <XAxis dataKey="date" stroke="var(--chart-axis)" />
+                <YAxis allowDecimals={false} stroke="var(--chart-axis)" />
+                <Tooltip
+                  cursor={{ fill: "var(--chart-cursor)" }}
+                  labelStyle={{ color: "var(--text-primary)" }}
+                  contentStyle={{
+                    background: "var(--chart-tooltip)",
+                    border: "1px solid var(--chart-tooltip-border)",
+                    borderRadius: 8,
+                  }}
+                />
+                <Bar dataKey="missions" fill="var(--chart-left)" />
               </BarChart>
             </ResponsiveContainer>
           </div>

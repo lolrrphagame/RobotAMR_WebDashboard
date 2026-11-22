@@ -21,8 +21,12 @@ export function LidarVisualization({
     >
       <defs>
         <radialGradient id="lidar-glow">
-          <stop offset="0%" stopColor="#15566a" stopOpacity=".35" />
-          <stop offset="100%" stopColor="#0c2030" stopOpacity=".2" />
+          <stop offset="0%" stopColor="var(--lidar-glow)" stopOpacity=".35" />
+          <stop
+            offset="100%"
+            stopColor="var(--lidar-glow-end)"
+            stopOpacity=".2"
+          />
         </radialGradient>
       </defs>
       <path
@@ -36,11 +40,11 @@ export function LidarVisualization({
             <path
               d={`M ${-r} 0 A ${r} ${r} 0 0 1 ${r} 0`}
               fill="none"
-              stroke="#29455d"
+              stroke="var(--lidar-grid)"
               strokeWidth=".014"
               strokeDasharray=".04 .06"
             />
-            <text x=".1" y={-r + 0.18} fill="#7897b5" fontSize=".14">
+            <text x=".1" y={-r + 0.18} fill="var(--lidar-axis)" fontSize=".14">
               {r} m
             </text>
           </g>
@@ -54,13 +58,13 @@ export function LidarVisualization({
               y1="0"
               x2={p.x}
               y2={p.y}
-              stroke="#29455d"
+              stroke="var(--lidar-grid)"
               strokeWidth=".014"
             />
             <text
               x={p.x * 1.075}
               y={p.y * 1.075 - 0.02}
-              fill="#7f9fbd"
+              fill="var(--lidar-axis)"
               fontSize=".16"
               textAnchor="middle"
             >
@@ -85,19 +89,25 @@ export function LidarVisualization({
                     y1="0"
                     x2={p.x}
                     y2={p.y}
-                    stroke="#28c8d1"
+                    stroke="var(--lidar-ray)"
                     strokeWidth=".012"
                     opacity=".17"
                   />
                 )}
-                <circle cx={p.x} cy={p.y} r=".031" fill="#49e2d2" />
+                <circle cx={p.x} cy={p.y} r=".031" fill="var(--lidar-point)" />
               </g>
             );
           })}
         </g>
       )}
-      <path d="M 0 -.16 L .12 .10 L -.12 .10 Z" fill="#62e6f4" />
-      <text x="0" y=".42" fill="#8fb2cb" fontSize=".16" textAnchor="middle">
+      <path d="M 0 -.16 L .12 .10 L -.12 .10 Z" fill="var(--map-robot)" />
+      <text
+        x="0"
+        y=".42"
+        fill="var(--lidar-axis)"
+        fontSize=".16"
+        textAnchor="middle"
+      >
         VIRTUAL LASER · ROBOT FRAME
       </text>
       {!ready && (
@@ -105,7 +115,7 @@ export function LidarVisualization({
           x="0"
           y={-max / 2}
           textAnchor="middle"
-          fill="#d4b782"
+          fill="var(--warning)"
           fontSize=".22"
         >
           No fresh simulated scan

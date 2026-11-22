@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
+import { verifyLoginThemes, verifySessionThemes } from "./theme";
 async function signIn(page: Page, role = "operator") {
   await page.getByLabel("Username", { exact: true }).fill(role);
   await page
@@ -55,7 +56,9 @@ test("anonymous sees only login; authenticated Observer monitors without control
   expect(bounds?.x).toBe(0);
   expect(bounds?.width).toBe(1440);
   await page.screenshot({ path: testInfo.outputPath("login-desktop.png") });
+  await verifyLoginThemes(page, testInfo);
   await signIn(page, "observer");
+  await verifySessionThemes(page, "observer");
   await expect(page.getByTestId("navigation-map")).toBeVisible();
   await expect(
     page.getByRole("button", { name: "STOP · CANCEL ALL MOTION", exact: true }),
@@ -104,6 +107,10 @@ test("trusted HTTPS operator login, WSS, STOP, refresh and logout", async ({
   page.on("websocket", (socket) => sockets.push(socket.url()));
   await page.goto("/overview");
   await signIn(page);
+  await expect(
+    page.getByRole("button", { name: "Forward", exact: true }),
+  ).toBeEnabled();
+  await verifySessionThemes(page, "operator");
   const forward = page.getByRole("button", { name: "Forward", exact: true });
   await expect(forward).toBeEnabled();
   await forward.focus();

@@ -28,6 +28,7 @@ const MissionsPage = lazy(() =>
 );
 import { OperatorSession } from "./components/OperatorSession";
 import { AuthBoundary } from "./components/AuthBoundary";
+import { ThemeSelector, ThemePreferences } from "./theme/ThemeSelector";
 
 const DiagnosticsPage = lazy(() =>
   import("./components/DiagnosticsPage").then((m) => ({
@@ -145,7 +146,8 @@ function Dashboard() {
             Workspace <ChevronRight size={14} />
             <strong>{page}</strong>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="topbar-tools">
+            <ThemeSelector />
             <span className="simulation-pill">
               <ShieldCheck size={14} /> SIMULATION
             </span>
@@ -456,6 +458,7 @@ function Dashboard() {
             )}
             {page === "Settings" && (
               <>
+                <ThemePreferences />
                 <HomeConfiguration
                   readOnly={!operator}
                   data={live}

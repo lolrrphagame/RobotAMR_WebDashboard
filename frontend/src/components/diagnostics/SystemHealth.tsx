@@ -22,28 +22,28 @@ export function SystemHealth({ history }: { history: Sample[] }) {
             label: "CPU load",
             unit: "%",
             max: 100,
-            color: "#39d5e7",
+            color: "var(--chart-left)",
           },
           {
             key: "ram",
             label: "RAM usage",
             unit: "%",
             max: 100,
-            color: "#9aabff",
+            color: "var(--chart-right)",
           },
           {
             key: "temperature",
             label: "CPU temperature",
             unit: "°C",
             max: 85,
-            color: "#e9b56a",
+            color: "var(--warning)",
           },
           {
             key: "battery",
             label: "Battery level",
             unit: "%",
             max: 100,
-            color: "#42d2a4",
+            color: "var(--success)",
           },
         ].map(({ key, label, unit, max, color }) => (
           <section className="panel" key={key}>
@@ -58,29 +58,35 @@ export function SystemHealth({ history }: { history: Sample[] }) {
                   margin={{ top: 20, right: 20, left: -12, bottom: 5 }}
                 >
                   <CartesianGrid
-                    stroke="#24364f"
+                    stroke="var(--chart-grid)"
                     strokeDasharray="3 5"
                     vertical={false}
                   />
                   <XAxis
                     dataKey="time"
                     minTickGap={80}
-                    tick={{ fontSize: 11 }}
-                    stroke="#7a94b3"
+                    tick={{ fontSize: 11, fill: "var(--chart-axis)" }}
+                    stroke="var(--chart-axis)"
                     axisLine={false}
                     tickLine={false}
                   />
                   <YAxis
                     domain={[0, max]}
-                    tick={{ fontSize: 11 }}
-                    stroke="#7a94b3"
+                    tick={{ fontSize: 11, fill: "var(--chart-axis)" }}
+                    stroke="var(--chart-axis)"
                     axisLine={false}
                     tickLine={false}
                   />
                   <Tooltip
+                    position={{ y: 0 }}
+                    cursor={{
+                      stroke: "var(--chart-axis)",
+                      strokeDasharray: "3 3",
+                    }}
+                    labelStyle={{ color: "var(--text-primary)" }}
                     contentStyle={{
-                      background: "#142239",
-                      border: "1px solid #344760",
+                      background: "var(--chart-tooltip)",
+                      border: "1px solid var(--chart-tooltip-border)",
                       borderRadius: 8,
                     }}
                   />

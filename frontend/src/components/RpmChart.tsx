@@ -17,7 +17,7 @@ export function RpmChart({
   motor: "left" | "right";
   windowLabel?: string;
 }) {
-  const color = motor === "left" ? "#25d9e8" : "#8d9bff";
+  const color = motor === "left" ? "var(--chart-left)" : "var(--chart-right)";
   return (
     <section className="panel chart-panel">
       <div className="panel-heading">
@@ -38,7 +38,7 @@ export function RpmChart({
           <i className="dashed" />
           Target RPM
         </span>
-        <span className="ml-auto text-slate-400">{windowLabel}</span>
+        <span className="chart-window-label">{windowLabel}</span>
       </div>
       <div className="chart">
         <ResponsiveContainer width="100%" height="100%">
@@ -47,30 +47,33 @@ export function RpmChart({
             margin={{ top: 12, right: 10, left: -22, bottom: 0 }}
           >
             <CartesianGrid
-              stroke="#223047"
+              stroke="var(--chart-grid)"
               strokeDasharray="3 5"
               vertical={false}
             />
             <XAxis
               dataKey="time"
               minTickGap={75}
-              stroke="#8191ab"
-              tick={{ fontSize: 12 }}
+              stroke="var(--chart-axis)"
+              tick={{ fontSize: 12, fill: "var(--chart-axis)" }}
               tickLine={false}
               axisLine={false}
             />
             <YAxis
               domain={[-45, 45]}
               ticks={[-40, -20, 0, 20, 40]}
-              stroke="#8191ab"
-              tick={{ fontSize: 12 }}
+              stroke="var(--chart-axis)"
+              tick={{ fontSize: 12, fill: "var(--chart-axis)" }}
               tickLine={false}
               axisLine={false}
             />
             <Tooltip
+              position={{ y: 0 }}
+              cursor={{ stroke: "var(--chart-axis)", strokeDasharray: "3 3" }}
+              labelStyle={{ color: "var(--text-primary)" }}
               contentStyle={{
-                background: "#121e30",
-                border: "1px solid #304059",
+                background: "var(--chart-tooltip)",
+                border: "1px solid var(--chart-tooltip-border)",
                 borderRadius: 10,
               }}
             />
@@ -78,7 +81,7 @@ export function RpmChart({
               name="Target RPM"
               type="monotone"
               dataKey={`${motor}Target`}
-              stroke="#a6b2c7"
+              stroke="var(--chart-target)"
               strokeDasharray="5 5"
               dot={false}
               isAnimationActive={false}

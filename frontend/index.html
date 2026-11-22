@@ -4,6 +4,44 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#080f1c" />
+    <script>
+      // Run before styles/React: only this non-sensitive preference enters storage.
+      (() => {
+        const key = "pbl4-theme";
+        const valid = (value) => ["light", "dark", "system"].includes(value);
+        let preference = "system";
+        try {
+          const saved = localStorage.getItem(key);
+          if (valid(saved)) preference = saved;
+        } catch {}
+        const apply = (value, persist = false) => {
+          preference = valid(value) ? value : "system";
+          const resolved =
+            preference === "system"
+              ? window.matchMedia?.("(prefers-color-scheme: light)").matches
+                ? "light"
+                : "dark"
+              : preference;
+          document.documentElement.dataset.theme = resolved;
+          document.documentElement.dataset.themePreference = preference;
+          document.documentElement.style.colorScheme = resolved;
+          document
+            .querySelector('meta[name="theme-color"]')
+            ?.setAttribute(
+              "content",
+              resolved === "light" ? "#f3f6fa" : "#080f1c",
+            );
+          if (persist) {
+            try {
+              localStorage.setItem(key, preference);
+            } catch {}
+          }
+          return { preference, resolved };
+        };
+        window.pbl4Theme = { key, apply };
+        apply(preference);
+      })();
+    </script>
     <meta
       name="description"
       content="PBL4 AMR simulation mission control dashboard"

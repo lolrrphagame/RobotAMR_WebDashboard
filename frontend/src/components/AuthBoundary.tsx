@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Bot, LockKeyhole, ShieldCheck } from "lucide-react";
 import { clearAuth, refreshAuth, localMode } from "../auth";
 import type { Session } from "../auth";
+import { ThemeSelector } from "../theme/ThemeSelector";
 
 const SessionContext = createContext<{
   session: Session;
@@ -137,6 +138,9 @@ export function AuthBoundary({ children }: { children: ReactNode }) {
           </div>
         </div>
         <span className="eyebrow">SECURE MISSION CONTROL</span>
+        <div className="login-theme">
+          <ThemeSelector label="Login theme" />
+        </div>
         <h1>Sign in to your workspace</h1>
         <p className="muted">
           Authenticated access for Operators and read-only Observers.

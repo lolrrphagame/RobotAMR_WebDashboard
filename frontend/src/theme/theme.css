@@ -1,0 +1,126 @@
+/* Layout shared by all appearances; theme changes never remount robot views. */
+.topbar-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: flex-end;
+}
+.theme-selector {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin: 0;
+  padding: 3px;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-inset);
+}
+.theme-choice {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.theme-choice input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: 0;
+}
+.theme-choice:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+.theme-choice[data-selected="true"] {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  border-color: var(--accent-border);
+}
+.theme-choice:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.theme-preferences {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 22px;
+  margin-bottom: 20px;
+}
+.theme-preferences h2 {
+  margin: 6px 0;
+}
+.login-theme {
+  margin: 18px 0 6px;
+}
+.chart-window-label {
+  margin-left: auto;
+  color: var(--text-muted);
+}
+.recharts-tooltip-label {
+  color: var(--text-primary);
+}
+.recharts-default-tooltip {
+  color: var(--text-primary);
+}
+input,
+select,
+textarea {
+  color: var(--text-primary);
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-subtle);
+  opacity: 1;
+}
+.primary-action:hover:not(:disabled) {
+  background: var(--button-primary-hover);
+}
+.login-card button:hover:not(:disabled) {
+  background: var(--login-button-hover);
+}
+@media (max-width: 700px) {
+  .topbar {
+    height: auto;
+    min-height: 75px;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+  .topbar-tools {
+    width: 100%;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .theme-choice {
+    min-height: 36px;
+    padding: 6px 8px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

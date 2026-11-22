@@ -174,7 +174,7 @@ export function NavigationMap({
             <path
               d={`M ${grid.resolution} 0 L 0 0 0 ${grid.resolution}`}
               fill="none"
-              stroke="#26374e"
+              stroke="var(--map-grid)"
               strokeWidth="0.009"
             />
           </pattern>
@@ -187,10 +187,10 @@ export function NavigationMap({
             markerHeight="5"
             orient="auto"
           >
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="#f4bc6b" />
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--map-goal)" />
           </marker>
         </defs>
-        <rect x="0" y="-6" width="8" height="6" fill="#0b1625" />
+        <rect x="0" y="-6" width="8" height="6" fill="var(--map-surface)" />
         <rect x="0" y="-6" width="8" height="6" fill="url(#nav-grid)" />
         {grid.data.map(
           (value, index) =>
@@ -204,8 +204,8 @@ export function NavigationMap({
                 }
                 width={grid.resolution + 0.002}
                 height={grid.resolution + 0.002}
-                fill={value < 0 ? "#846e42" : "#3c526c"}
-                stroke="#5f7791"
+                fill={value < 0 ? "var(--map-unknown)" : "var(--map-occupied)"}
+                stroke="var(--map-obstacle-border)"
                 strokeWidth="0.008"
               />
             ),
@@ -217,14 +217,14 @@ export function NavigationMap({
               x2={x}
               y1="0"
               y2="-6"
-              stroke="#30425a"
+              stroke="var(--map-grid-major)"
               strokeWidth="0.012"
             />
             <text
               x={x}
               y="0.26"
               textAnchor="middle"
-              fill="#8da8c5"
+              fill="var(--map-axis)"
               fontSize="0.14"
             >
               {x} m
@@ -238,14 +238,14 @@ export function NavigationMap({
               x2="8"
               y1={-y}
               y2={-y}
-              stroke="#30425a"
+              stroke="var(--map-grid-major)"
               strokeWidth="0.012"
             />
             <text
               x="-0.16"
               y={-y + 0.05}
               textAnchor="end"
-              fill="#8da8c5"
+              fill="var(--map-axis)"
               fontSize="0.14"
             >
               {y}
@@ -258,7 +258,7 @@ export function NavigationMap({
               data-testid="planned-path"
               points={points(data.navigation.path)}
               fill="none"
-              stroke="#6c9bff"
+              stroke="var(--map-path)"
               strokeWidth="0.035"
               strokeDasharray="0.10 0.07"
               strokeLinejoin="round"
@@ -266,7 +266,7 @@ export function NavigationMap({
             <polyline
               points={points(data.trajectory)}
               fill="none"
-              stroke="#29c6b3"
+              stroke="var(--map-trail)"
               strokeWidth="0.025"
               strokeOpacity=".75"
             />
@@ -276,15 +276,15 @@ export function NavigationMap({
             >
               <path
                 d="M 0 -.21 L .21 0 L 0 .21 L -.21 0 Z"
-                fill="#403216"
-                stroke="#efcc78"
+                fill="var(--map-home-fill)"
+                stroke="var(--map-home)"
                 strokeWidth=".025"
               />
               <text
                 y=".05"
                 textAnchor="middle"
                 fontSize=".14"
-                fill="#ffe0a1"
+                fill="var(--map-home-text)"
                 transform={`rotate(${(data.home.yaw * 180) / Math.PI})`}
               >
                 H
@@ -294,7 +294,7 @@ export function NavigationMap({
                 x2=".42"
                 y1="0"
                 y2="0"
-                stroke="#efcc78"
+                stroke="var(--map-home)"
                 strokeWidth=".025"
               />
             </g>
@@ -306,11 +306,16 @@ export function NavigationMap({
               <g key={name} transform={`translate(${p.x} ${-p.y})`}>
                 <circle
                   r=".14"
-                  fill="#233255"
-                  stroke="#a7adff"
+                  fill="var(--map-waypoint-fill)"
+                  stroke="var(--map-waypoint)"
                   strokeWidth=".02"
                 />
-                <text textAnchor="middle" y=".05" fontSize=".15" fill="#d8d6ff">
+                <text
+                  textAnchor="middle"
+                  y=".05"
+                  fontSize=".15"
+                  fill="var(--map-waypoint-text)"
+                >
                   {name}
                 </text>
               </g>
@@ -322,8 +327,8 @@ export function NavigationMap({
           >
             <circle
               r=".15"
-              fill="#efb96122"
-              stroke="#f4bc6b"
+              fill="var(--map-goal-fill)"
+              stroke="var(--map-goal)"
               strokeWidth=".025"
             />
             <line
@@ -331,7 +336,7 @@ export function NavigationMap({
               y1="0"
               x2=".5"
               y2="0"
-              stroke="#f4bc6b"
+              stroke="var(--map-goal)"
               strokeWidth=".025"
               markerEnd="url(#nav-arrow)"
             />
@@ -345,8 +350,8 @@ export function NavigationMap({
                 cx={x}
                 cy={-y}
                 r=".025"
-                fill="#4cebd2"
-                stroke="#135048"
+                fill="var(--lidar-point)"
+                stroke="var(--lidar-point-border)"
                 strokeWidth=".006"
               />
             ))}
@@ -359,8 +364,8 @@ export function NavigationMap({
           >
             <circle
               r={grid.clearance_radius}
-              fill="#29d5ed0b"
-              stroke="#39cee6"
+              fill="var(--map-clearance-fill)"
+              stroke="var(--map-clearance)"
               strokeWidth=".012"
               strokeDasharray=".025 .025"
             />
@@ -370,8 +375,8 @@ export function NavigationMap({
               width=".25"
               height=".25"
               rx=".04"
-              fill="#123e52"
-              stroke="#4fe6f4"
+              fill="var(--map-robot-fill)"
+              stroke="var(--map-robot)"
               strokeWidth=".025"
             />
             <rect
@@ -380,7 +385,7 @@ export function NavigationMap({
               width=".14"
               height=".05"
               rx=".01"
-              fill="#9cb2ce"
+              fill="var(--map-wheel)"
             />
             <rect
               x="-.07"
@@ -388,13 +393,13 @@ export function NavigationMap({
               width=".14"
               height=".05"
               rx=".01"
-              fill="#9cb2ce"
+              fill="var(--map-wheel)"
             />
-            <circle cx="-.08" cy="0" r=".025" fill="#92aabd" />
+            <circle cx="-.08" cy="0" r=".025" fill="var(--map-caster)" />
             <path
               d="M -.01 -.06 L .12 0 L -.01 .06"
               fill="none"
-              stroke="#7df3ff"
+              stroke="var(--map-heading)"
               strokeWidth=".025"
             />
             <line
@@ -402,7 +407,7 @@ export function NavigationMap({
               x2=".38"
               y1="0"
               y2="0"
-              stroke="#4fe6f4"
+              stroke="var(--map-robot)"
               strokeWidth=".025"
             />
           </g>

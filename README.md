@@ -1,6 +1,38 @@
-# PBL4 AMR Mission Control — Phase 5C · Final Simulation Acceptance
+# PBL4 AMR Mission Control — Phase 5D · Light / Dark / System
 
 A simulation-only industrial robot dashboard built with React, TypeScript, Vite, Tailwind CSS, Recharts and FastAPI. No ROS, serial, GPIO, camera or motor interfaces are imported or opened. All controls, encoder readings and health values are simulated.
+
+## Phase 5D: appearance preferences
+
+Choose **Light**, **Dark**, or **System** in the top bar, on the login page, or under **Settings → Theme preference**. Dark keeps the navy/cyan control-room appearance; Light uses white panels on a pale slate workspace with darker cyan accents. **System is the default** and follows OS appearance changes while the dashboard is open. Tab into the selector and use arrow keys or Space to select an option. Reduced-motion preferences are respected.
+
+The preference is stored as `pbl4-theme` in this browser's localStorage, scoped to the dashboard's origin (scheme, hostname and port), and synchronized between tabs on that origin. It is independent of the signed-in account. No credentials, cookies, CSRF tokens or robot records are stored there by the theme feature. Clear this key or select System to follow the OS again. If browser storage is blocked, switching still works for the current page; reload returns to System.
+
+An early script in `frontend/index.html` resolves the theme before React renders. The reusable provider in `frontend/src/theme/ThemeProvider.tsx` listens for OS/storage changes; `ThemeSelector.tsx` provides accessible native radio controls. Shared semantic palettes in `tokens.css` cover surfaces, typography, borders, status, charts, map markers and simulated sensor visualization. Components use the same CSS rules in both themes. Theme selection performs no network requests or robot commands and does not remount the telemetry connection. Backend behavior, map geometry, accounts, permissions, STOP and hardware-disabled safeguards are unchanged.
+
+### Run and verify
+
+Use the existing project-local dependencies. Stop the current service before rebuilding/updating, then run:
+
+```bash
+cd ~/Projects/PBL4_Dashboard
+./start-dashboard.sh
+```
+
+Open **http://127.0.0.1:8000**. Press **Ctrl+C** for graceful shutdown. Existing authenticated LAN deployment still uses the separately configured `./start-dashboard-lan.sh`; theme preferences never enable LAN access or bypass login. Development commands and installation prerequisites remain documented below.
+
+```bash
+cd ~/Projects/PBL4_Dashboard
+env -u PYTHONPATH backend/.venv/bin/python -m pytest backend/tests -q
+npm --prefix frontend run build
+npm --prefix frontend run test:e2e
+npm --prefix frontend run test:production
+npm --prefix frontend run test:lan
+```
+
+Browser suites use isolated simulation records and temporary LAN accounts/certificates. LAN testing requires the already-installed project-local Caddy binary and existing Chromium/NSS support; no system or trust-store installation is performed. Run browser suites sequentially when using their default shared `frontend/test-results` output directory.
+
+Phase 5D results and screenshots are in [the visual verification record](acceptance/phase5d/README.md). Automated coverage includes OS changes, persistence, unavailable storage, keyboard selection, page navigation, responsive layouts, themed charts/maps, production bootstrap before React, authenticated Operator/Observer sessions, and motion/STOP regression. Screenshot review covers every main page and all Diagnostics tabs in both themes. Chromium viewport emulation is not physical-device or Safari/Firefox acceptance; color-pair checks are not a complete accessibility certification. On narrow screens, retain the map's existing zoom/pan controls for fine grid labels.
 
 ## Phase 5C: acceptance, measured optimization and Pi readiness
 
