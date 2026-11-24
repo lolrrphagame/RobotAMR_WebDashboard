@@ -10,7 +10,7 @@ test("stationary Operator saves caps, retains manual speeds and can STOP a pause
   const authority = section.getByTestId("settings-motion-authority");
   const linearCap = section.getByLabel("Maximum linear speed (m/s)");
   const angularCap = section.getByLabel("Maximum angular speed (rad/s)");
-  const save = section.getByRole("button", { name: "Save autonomous limits" });
+  const save = section.getByRole("button", { name: "Save motion settings" });
   const open = (name: string) =>
     page.getByRole("button", { name, exact: true }).click();
   const navigation = page.getByTestId("navigation-status");
@@ -31,7 +31,7 @@ test("stationary Operator saves caps, retains manual speeds and can STOP a pause
   await angularCap.fill("0.2");
   await save.click();
   await expect(section.getByRole("status")).toHaveText(
-    "Autonomous speed limits saved.",
+    "Motion settings saved.",
   );
   await page.reload();
   await expect(linearCap).toHaveValue("0.04");
@@ -100,7 +100,7 @@ test("stationary Operator saves caps, retains manual speeds and can STOP a pause
   await angularCap.fill("0.8");
   await save.click();
   await expect(section.getByRole("status")).toHaveText(
-    "Autonomous speed limits saved.",
+    "Motion settings saved.",
   );
 });
 
@@ -148,9 +148,89 @@ test("motion settings fit both themes and show save conflicts inline", async ({
     }),
   );
   await linear.fill("0.07");
-  await section.getByRole("button", { name: "Save autonomous limits" }).click();
+  await section.getByRole("button", { name: "Save motion settings" }).click();
   await expect(section.getByRole("alert")).toHaveText(
     /cannot change during a running or paused mission/,
   );
   await expect(linear).toHaveValue("0.07");
+});
+
+test("Navigation reports manual ownership and running or paused WAIT reservations", async ({
+  page,
+  request,
+}) => {
+  const open = (name: string) =>
+    page.getByRole("button", { name, exact: true }).click();
+  await page.goto("/navigation");
+  const authority = page.getByTestId("control-authority");
+  await expect(authority).toHaveText("STANDBY");
+  const manual = await page.evaluateHandle(async () => {
+    const socket = new WebSocket(`ws://${location.host}/ws/telemetry`);
+    await new Promise<void>((resolve, reject) => {
+      socket.onopen = () => resolve();
+      socket.onerror = () => reject(new Error("Test operator socket failed"));
+    });
+    const drive = () =>
+      socket.send(JSON.stringify({ type: "control", angular: 0.2 }));
+    drive();
+    const timer = window.setInterval(drive, 150);
+    return { socket, timer };
+  });
+  try {
+    await expect(authority).toHaveText("MANUAL");
+    await expect(
+      page.getByRole("button", { name: "Plan path" }),
+    ).toBeDisabled();
+  } finally {
+    await manual.evaluate(({ socket, timer }) => {
+      window.clearInterval(timer);
+      socket.send(JSON.stringify({ type: "release" }));
+      socket.close();
+    });
+    await manual.dispose();
+  }
+  await expect(authority).toHaveText("STANDBY");
+  const queued = await request.post("/api/missions", {
+    data: {
+      name: "Authority WAIT test",
+      steps: [{ kind: "wait", seconds: 25 }],
+    },
+  });
+  expect(queued.ok()).toBe(true);
+  await open("Missions");
+  await open("Start next mission");
+  await open("Navigation");
+  const reservation = page.getByText(
+    "Mission Operations reservation · WAIT step",
+    { exact: true },
+  );
+  await expect(authority).toHaveText("AUTONOMOUS");
+  await expect(reservation).toBeVisible();
+  await expect(page.getByTestId("navigation-status")).toHaveText("running");
+  await open("Pause");
+  await expect(page.getByTestId("navigation-status")).toHaveText("paused");
+  await expect(
+    page.getByText("Autonomous paused — Simulation controller"),
+  ).toBeVisible();
+  await expect(reservation).toBeVisible();
+  await open("Settings");
+  const settings = page.getByRole("region", {
+    name: "Motion Control & Speed Limits",
+  });
+  await expect(
+    settings.getByRole("slider", { name: "Adjust maximum wheel speed" }),
+  ).toBeDisabled();
+  await expect(
+    settings.getByRole("button", { name: "Restore Motion Defaults" }),
+  ).toBeDisabled();
+  await expect(
+    settings.getByText(/including a running or paused mission or a WAIT step/),
+  ).toBeVisible();
+  await open("Navigation");
+  await open("Resume");
+  await expect(page.getByTestId("navigation-status")).toHaveText("running");
+  await expect(reservation).toBeVisible();
+  await open("Cancel mission");
+  await expect(authority).toHaveText("STANDBY");
+  await expect(reservation).toHaveCount(0);
 });

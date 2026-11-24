@@ -8,6 +8,7 @@ import {
   YAxis,
 } from "recharts";
 import type { Sample } from "../types";
+import { withHistoryGaps } from "../utils/telemetry";
 export function RpmChart({
   history,
   motor,
@@ -43,7 +44,7 @@ export function RpmChart({
       <div className="chart">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
-            data={history}
+            data={withHistoryGaps(history)}
             margin={{ top: 12, right: 10, left: -22, bottom: 0 }}
           >
             <CartesianGrid
@@ -84,6 +85,7 @@ export function RpmChart({
               stroke="var(--chart-target)"
               strokeDasharray="5 5"
               dot={false}
+              connectNulls={false}
               isAnimationActive={false}
             />
             <Line
@@ -93,6 +95,7 @@ export function RpmChart({
               stroke={color}
               strokeWidth={2.5}
               dot={false}
+              connectNulls={false}
               isAnimationActive={false}
             />
           </LineChart>

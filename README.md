@@ -1,31 +1,63 @@
-# PBL4 AMR Mission Control — Phase 5E.1 · Control Authority and Autonomous Speed Limits
+# PBL4 AMR Mission Control — Phase 5E.2 · Advanced Motion Tuning and Live Motion Analysis
 
 A simulation-only industrial robot dashboard built with React, TypeScript, Vite, Tailwind CSS, Recharts and FastAPI. No ROS, serial, GPIO, camera or motor interfaces are imported or opened. All controls, encoder readings and health values are simulated.
 
-## Phase 5E.1 · Control authority and autonomous speed limits
+## Phase 5E.2 · Advanced motion tuning and live motion analysis
 
-Open **Settings → Motion Control & Speed Limits** to see the simulator's current control authority, configured limits and drive constraints. **STANDBY** means no motion owner. **MANUAL** means an Operator owns hold-to-drive control. **AUTONOMOUS** means Navigation or Mission Operations has reserved motion, including during a pause or a WAIT step. Planning a path leaves the robot in standby. Starting or resuming a mission requires an explicit command.
+Open **Settings → Motion Control & Speed Limits** to adjust simulator limits. Wheel tuning applies to Manual Control and autonomous missions. Manual Control keeps its own input sliders for requested velocity, and Navigation and Mission Operations use the configured autonomous caps.
 
-Manual Control keeps its own linear and angular sliders. Release a direction to stop. While a mission reserves autonomous motion, the backend rejects manual drive commands and the dashboard locks the directions and sliders. Authorized Operators can still issue STOP.
-
-| Autonomous cap | Default | Accepted simulation range |
+| Motion setting | Default | Accepted simulation range |
 | --- | ---: | ---: |
-| Maximum linear speed | 0.13 m/s | 0.01–0.18 m/s |
-| Maximum angular speed | 0.8 rad/s | 0.1–1.2 rad/s |
+| Maximum autonomous linear speed | 0.13 m/s | 0.01–0.18 m/s |
+| Maximum autonomous angular speed | 0.8 rad/s | 0.1–1.2 rad/s |
+| Maximum wheel speed | 40 RPM | 10–40 RPM |
+| Wheel acceleration (slew rate) | 60 RPM/s | 10–60 RPM/s |
 
-Observers can read the limits. Operators can save them while the simulated wheels are stationary, manual input has been released, and there is no running or paused mission. Saves use the existing atomic version-1 robot configuration file. Older version-1 files load with the defaults when the new field is absent. Invalid saved limits use the defaults and raise a load warning while valid Home and waypoint entries are restored.
+Edits take effect after **Save motion settings**. **Restore Motion Defaults** restores all four defaults and preserves Home and A/B/C waypoints. Observers can read the settings. Operators can save or restore only when the robot is stationary, manual input is released, no owner holds motion, and no running or paused Navigation mission or Mission Operations reservation exists. A WAIT step reserves motion even when the wheels are stationary. Both writes use the existing atomic version-1 configuration file. Legacy files use defaults for missing tuning fields, and invalid saved wheel settings fall back to defaults with a load warning. Tuning alone leaves the robot stationary. STOP, release, watchdog expiry and collision halts still zero simulated wheel motion immediately.
 
-The existing point follower calculates its own velocity request. When either configured cap is reached, the simulator scales the linear and angular targets by the same factor to preserve commanded curvature. The differential drive then scales both wheel targets as needed to stay within **±40 RPM per wheel**. At the current wheel radius and separation, that cap allows about **0.182 m/s** in a straight line or **1.215 rad/s** turning in place. Raising the configured caps above the point follower's current request has no effect. Simulated measured velocity responds according to the existing wheel acceleration model and can lag changes in the targets.
+**Navigation** shows the backend's STANDBY, MANUAL or AUTONOMOUS authority, the active or paused simulation controller, and any WAIT reservation. Planning a path leaves authority in STANDBY. Navigation also shows configured autonomous caps, the effective wheel limit, requested/limited/measured body velocity and current limiting. Starting or resuming a mission requires an explicit command.
 
-`GET /api/configuration` returns `autonomous_speed_limits` and the accepted `autonomous_speed_limit_ranges`. Send both limits with `POST /api/configuration` or the Operator telemetry WebSocket:
+### Kinematic envelopes
 
-```json
-{"type":"configuration","action":"set_autonomous_speed_limits","autonomous_speed_limits":{"max_linear":0.1,"max_angular":0.6}}
+The backend supplies the read-only geometry of **0.0435 m wheel radius**, **0.300 m wheel separation** and **3,960 counts per wheel revolution**. Settings compares configured limits against effective limits. The formulas use wheel radius `r`, separation `L`, effective wheel speed `RPM_max` and effective wheel slew `RPM_per_second`.
+
+```text
+v_max     = RPM_max * 2πr / 60
+omega_max = 2 * v_max / L
+a_max     = RPM_per_second * 2πr / 60
+alpha_max = 2 * a_max / L
 ```
 
-The POST returns **403** for insufficient privileges, **409** for motion or mission conflicts, **422** for invalid values and **400** for storage errors. The live telemetry `mode` remains the authority field. `diagnostics.motion` exposes `requested`, `limited` and simulated `measured` body velocity in m/s and rad/s, plus `limit_active` and `autonomous_limit_active`. `diagnostics.saturation` describes wheel RPM limiting after the autonomous caps are applied. `diagnostics.safety.autonomous_limits_blocked_reason` explains when the motion state blocks updates. Settings displays authority and configured limits. Diagnostics displays authority, simulated motion and active limiting.
+The defaults allow approximately **0.1822 m/s** in a straight line, **1.2147 rad/s** turning in place, **0.2733 m/s²** straight-line acceleration and **1.8221 rad/s²** in-place angular acceleration. The effective autonomous envelope for each axis is the smaller of its configured cap and the corresponding wheel-speed envelope. Straight-line and in-place maxima describe separate motions. The simulator scales autonomous command axes together when a configured cap is reached, then scales both wheel targets together when combined linear and angular demand reaches the per-wheel limit. The point follower can request less than the active envelope. Constructor-supplied ceilings can further reduce wheel speed or slew. These are simulator tuning ranges and calculated model envelopes. Hardware operating limits and measured performance require separate validation.
 
-**This phase is simulation-only.** Navigation uses the local A* planner and point follower. ROS 2, Nav2, UART, GPIO and the motor controller remain disconnected.
+### Motion diagnostics
+
+Open **Diagnostics → Motion Analysis** and choose **10, 30 or 60 seconds**. The charts show requested, limited and simulated measured body velocity in m/s and rad/s, and signed wheel tracking error in RPM against zero. Requested versus limited shows command limiting. Limited versus measured shows body tracking. Target minus actual RPM shows wheel tracking. The statistics table reports mean absolute error (MAE), root mean square error (RMSE), maximum absolute error and valid sample counts in each signal's units. Missing fields are omitted from that signal's statistics. A row with no valid samples displays **Unavailable**.
+
+The view uses the existing 600-sample backend buffer and single telemetry WebSocket. Windows end at the latest retained backend sample and may contain less than their selected duration. The charts leave breaks for missing telemetry, deduplicate timestamps within the current backend session and discard older-session samples on restart. Reconnecting does not resume a mission. **Export telemetry CSV** exports the full retained backend buffer, with session IDs and requested, limited, measured and wheel tracking columns. Historical data and chart statistics do not persist across server restarts.
+
+**Diagnostics → Motors** shows the unavailable firmware PI values and read-only integration status. The simulator uses local A* and a point follower for navigation. ROS 2, Nav2 and ESP32-S3 telemetry are disconnected, and UART, GPIO and physical motor interfaces are disabled.
+
+### Configuration API
+
+`GET /api/configuration` returns `autonomous_speed_limits`, `wheel_constraints`, both accepted range maps, `effective_wheel_constraints` and `kinematic_limits`. Submit one complete settings group or both groups atomically with `POST /api/configuration` or the Operator telemetry WebSocket. The existing `set_autonomous_speed_limits` action remains supported.
+
+```json
+{"type":"configuration","action":"set_motion_settings","autonomous_speed_limits":{"max_linear":0.1,"max_angular":0.6},"wheel_constraints":{"max_rpm":20,"acceleration_rpm_s":15}}
+```
+
+```json
+{"type":"configuration","action":"restore_motion_defaults"}
+```
+
+The POST returns **403** for insufficient privileges, **409** for motion or mission conflicts, **422** for invalid values and **400** for storage errors. Live telemetry uses `mode` for control authority, `drive` for effective wheel constraints and geometry, and `diagnostics.motion` and `diagnostics.saturation` for velocity stages and active limiting. `diagnostics.safety.autonomous_limits_blocked_reason` covers saves and restores for both settings groups.
+
+### Manual verification
+
+1. Open **Settings** in the running simulator and enter **18 RPM** and **12 RPM/s**. Check that the effective limits stay at the saved values until you click **Save motion settings**. Reload and confirm the new settings and their kinematic envelopes.
+2. Hold and release **Forward** in **Manual Control**. Check the displayed **18 RPM** cap and the immediate stop on release. Plan a path in **Navigation** and check that authority stays **STANDBY**. Start the mission, inspect the three velocity stages, then pause. Check that Settings disables saving and restoring until you cancel. Repeat with a running or paused **WAIT** step from **Mission Operations**.
+3. Open **Diagnostics → Motion Analysis** soon after moving. Switch between **10**, **30** and **60 seconds**, inspect the zero reference and error statistics, then export the CSV. Check the charts in Light, Dark and a narrow viewport.
+4. Click **Restore Motion Defaults** once the robot is stationary and released. Verify **40 RPM**, **60 RPM/s**, **0.13 m/s** and **0.8 rad/s**, with Home and waypoints still present. In authenticated LAN mode, sign in as an Observer and verify that settings remain visible and read-only.
 
 ## Phase 5D: appearance preferences
 
@@ -376,9 +408,9 @@ Browser tests start isolated frontend/backend servers on ports **15173 and 18000
 - **Missions:** named mission builder, templates, bounded queue, explicit execution, persistent history and stored-record analytics.
 - **Sensors:** a deterministic virtual LiDAR radar view and a clearly labeled, disconnected camera placeholder. Navigation offers an optional simulated laser-point overlay.
 - **Diagnostics:** Motors, System Health, Communication and Events tabs with simulated measurements, bounded history, honest unavailable hardware fields, filtering and CSV exports.
-- **Settings:** appearance preferences, current control authority, autonomous speed limits, saved Home controls and read-only simulation parameters. Home can also be configured directly from Navigation.
+- **Settings:** appearance preferences, current control authority, autonomous speed caps and wheel constraints, saved Home controls and read-only simulation parameters. Home can also be configured directly from Navigation.
 
-Charts retain the most recent 150 samples (approximately 15 seconds at 10 Hz). The virtual robot starts stationary at its validated saved Home (default **1.0 m, 1.0 m, 0 rad**); hold a direction to see target and actual RPM responses. Wheel response uses a **60 RPM/s slew limit** for smooth acceleration, deceleration and reversal. Both target and actual speeds stay within **±40 RPM**. This is a kinematic model, not a firmware PI implementation or a measured hardware model. Health values are synthetic. Event history is bounded to 60 entries and is not persisted.
+Overview and Manual Control charts show the most recent 150 samples (approximately 15 seconds at 10 Hz). The virtual robot starts stationary at its validated saved Home (default **1.0 m, 1.0 m, 0 rad**); hold a direction to see target and actual RPM responses. Wheel response uses the configured slew rate, **60 RPM/s** by default, for smooth acceleration, deceleration and reversal. Both target and actual speeds stay within the effective wheel limit of **±40 RPM** or less. This is a kinematic model, not a firmware PI implementation or a measured hardware model. Health values are synthetic. Event history is bounded to 60 entries and is not persisted.
 
 ## Navigate the virtual AMR
 
@@ -401,7 +433,7 @@ On **Navigation**, choose a map destination and heading, then select **Set Selec
 
 Every Home update is checked against the map and the same footprint clearance as navigation. Home changes are rejected while a mission is **running or paused**, including through the API; rejection does not pause the mission or change its owner. A change never teleports or resets the current robot, encoders, wheels or trajectory. Return Home always plans to the currently saved Home. Only a **new backend session** initializes pose at saved Home, stationary with zero encoders.
 
-The default configuration file is **`backend/data/robot-config.json`**, excluded from Git. The version-1 file stores Home, A/B/C waypoint poses/headings and autonomous speed limits. Override its location using an absolute `ROBOT_CONFIG_PATH` when starting Uvicorn. `ROBOT_CONFIG_PATH=:memory:` explicitly disables persistence, primarily for isolated browser tests.
+The default configuration file is **`backend/data/robot-config.json`**, excluded from Git. The version-1 file stores Home, A/B/C waypoint poses/headings, autonomous speed caps and simulator wheel constraints. Override its location using an absolute `ROBOT_CONFIG_PATH` when starting Uvicorn. `ROBOT_CONFIG_PATH=:memory:` explicitly disables persistence, primarily for isolated browser tests.
 
 Saves write a temporary file in the same directory, flush/fsync it, then atomically replace the destination. In-memory configuration is updated only after successful replacement. Permission/disk failures report an error and leave the previous configuration in memory and on disk. Use a **single backend worker/process** per configuration file; cross-process editing is not supported. Local storage must be writable. No system installation is needed.
 
@@ -421,15 +453,15 @@ The POST API returns the updated configuration, **409** for Home changes during 
 
 ## Phase 3: diagnostics and exports
 
-- **Motors:** target/actual RPM, signed tracking error (`target − actual`), independent normalized/raw encoders, wheel velocity, estimated signed net wheel travel, requested/limited/measured body motion, saturation, watchdog state, STOP latch/reason and pose clearance. RPM saturation proportionally scales targets to ±40 RPM. Travel is derived from full-resolution normalized encoder integration, not rounded displayed counts.
-- **Response history:** actual/target charts for both motors over up to 600 samples (approximately 60 seconds). Overview keeps its existing 15-second chart window.
+- **Motors:** target/actual RPM, signed tracking error (`target − actual`), independent normalized/raw encoders, wheel velocity, estimated signed net wheel travel, requested/limited/measured body motion, saturation, watchdog state, STOP latch/reason and pose clearance. RPM saturation proportionally scales targets to the effective wheel limit, at most ±40 RPM. Travel is derived from full-resolution normalized encoder integration, not rounded displayed counts.
+- **Response history:** actual/target charts for both motors over up to 600 samples (approximately 60 seconds). Overview keeps its existing 15-second chart window. Motion Analysis adds body velocity and wheel tracking error charts with selectable 10-, 30- and 60-second windows.
 - **Future PI telemetry:** per-motor `pi` fields (`kp`, `ki`, `pwm`, `control_error`, `integral_term`) are **null / Unavailable** with source `unavailable`. No PI gains, PWM or integrator values are invented; the plant is acceleration-limited, not the ESP32 firmware PI controller. The UI reads these fields from the telemetry contract for future explicitly sourced data.
 - **System Health:** synthetic CPU, RAM, temperature and battery history. These are not Raspberry Pi or battery sensor readings. Some synthetic channels are intentionally constant.
 - **Communication:** disabled ROS 2 Humble and UART contracts. Planned nodes/topics and 20/10/15 Hz rates are proposed design targets, not verified runtime frequencies. `/diagnostics` compatibility is planned as `diagnostic_msgs/DiagnosticArray`. ROS message timestamps/observed rates remain null. UART is planned for **57600 baud**, but heartbeat/watchdog, TX/RX, hardware command/fault counters and message timestamps remain null/unavailable. WebSocket service counters are shown separately and never represented as UART activity.
 - **Events:** filter INFO/WARNING/ERROR, case-insensitive keyword search and export matching backend events as CSV. CSV quoting preserves commas/quotes; formula-like string cells are escaped. Export errors are visible.
 - **Freshness:** connection state, physical sample age and last-update time are displayed. Live motor measurements disappear on disconnect; retained charts/events are historical. Reconnection hydrates backend history. A new `session_id` clears prior-session chart samples rather than mixing reset encoders and motion histories.
 
-The backend retains **600 compact history samples** and **60 events** in bounded deques. The frontend also caps history at 600 and deduplicates physical sample timestamps. Only the compact measurements are buffered, not copies of full paths/trajectories. CSV telemetry exports include timestamp/session/source, pose, requested/measured body motion, both target/actual/error RPMs, encoders, wheel travel, saturation and system health. Exports use the backend's current retained buffer and reset after backend restart. There is no unlimited logging or historical database.
+The backend retains **600 compact history samples** and **60 events** in bounded deques. The frontend also caps history at 600 and deduplicates physical sample timestamps. Only the compact measurements are buffered, not copies of full paths/trajectories. CSV telemetry exports include timestamp/session/source, pose, requested/limited/measured body motion, both target/actual/error RPMs, encoders, wheel travel, saturation and system health. Exports use the backend's current retained buffer and reset after backend restart. There is no unlimited logging or historical database.
 
 Browser integration tests use ports 15173/18000 and **memory-only configuration**, never the developer's saved Home/waypoints. Python API tests use isolated temporary configuration files; persistence tests explicitly reopen the store across simulator/lifespan restarts.
 
@@ -562,7 +594,7 @@ Send these over the existing WebSocket, with `heartbeat` messages every 150 ms w
 
 ## Safety behavior
 
-Live motion commands and ownership stay in memory. Home, waypoints and autonomous speed limits are saved as robot configuration.
+Live motion commands and ownership stay in memory. Home, waypoints and motion settings are saved as robot configuration.
 
 - Frontend sends a control heartbeat every 150 ms only while a direction is held.
 - Manual pointer release/cancel, lost pointer capture, keyboard release, focus loss, hidden tab, page change, slider change and control unmount send an owner-scoped `release`. This stops manual motion without cancelling an autonomous mission or another client’s command. Page exit/unmount closes the controller connection.
@@ -575,7 +607,7 @@ Live motion commands and ownership stay in memory. Home, waypoints and autonomou
 - One collision warning is logged per source/episode. Held retries and stationary ticks do not duplicate warnings. A new encounter may warn after the robot moves at least **0.10 m** from the warning pose (or changes between manual and autonomous collision sources).
 - Home clearance is validated when creating the simulator. HTTP/WebSocket telemetry includes `clearance.pose_clear` and `clearance.radius`; **Diagnostics** shows current pose clearance. Error messages distinguish an obstructed robot pose from an invalid destination.
 - A stale telemetry stream is closed after approximately two seconds; reconnection starts with no pending drive command.
-- The input envelope accepts ±0.6 m/s and ±2.0 rad/s, then **proportionally scales both wheel targets** to enforce ±40 RPM even for combined linear/angular commands. This preserves commanded curvature. The maximum straight speed is about **0.1822 m/s**; UI sliders use 0.02–0.18 m/s and 0.2–1.2 rad/s. Non-finite values, unknown commands and extra fields are rejected.
+- The input envelope accepts ±0.6 m/s and ±2.0 rad/s, then **proportionally scales both wheel targets** to enforce the effective wheel limit even for combined linear/angular commands. This preserves commanded curvature. The default 40 RPM cap gives a maximum straight speed of about **0.1822 m/s**; UI sliders use 0.02–0.18 m/s and 0.2–1.2 rad/s. Non-finite values, unknown commands and extra fields are rejected.
 - One WebSocket client can own motion at a time. Authenticated Observers can monitor; only authenticated Operators may issue STOP (local trusted controls remain available). This is a simulation application with Phase 5A LAN operator authorization, not a hardware safety system.
 
 ## HTTP and WebSocket API
@@ -585,7 +617,7 @@ Live motion commands and ownership stay in memory. Home, waypoints and autonomou
 | `GET /api/health` | Service health, `simulation: true`, `hardware_enabled: false` |
 | `GET /api/robot/status` | Current shared simulator snapshot |
 | `GET /api/map` | Static row-major simulated occupancy grid with origin, resolution, frame and clearance radius |
-| `GET /api/configuration` | Saved Home, A/B/C waypoints, autonomous speed limits and ranges, storage mode and startup validation warnings |
+| `GET /api/configuration` | Saved Home, A/B/C waypoints, autonomous and wheel settings/ranges, effective constraints, kinematic envelopes, storage mode and startup validation warnings |
 | `POST /api/configuration` | Validated `set_home`, `current_home`, `reset_home` and `set_autonomous_speed_limits` commands |
 | `POST /api/waypoints` | Validated save/delete waypoint commands |
 | `GET /api/events?level=warning&q=collision&format=csv` | Filtered bounded event export (`format=json` by default) |
@@ -644,7 +676,7 @@ backend/
   app/navigation.py             Occupancy grid, footprint collision checks, A*
   app/mission.py                Waypoints, mission lifecycle and path follower
   app/telemetry.py               Shared HTTP/WebSocket state serialization
-  app/configuration.py           Validated Home/waypoints/speed limits and atomic persistence
+  app/configuration.py           Validated Home, waypoints and motion settings with atomic persistence
   app/diagnostics.py             Simulated measurements and future interface contracts
   app/exports.py                 Event filtering and CSV formatting
   app/sensors/contracts.py       Transport-neutral sensor envelope / adapter protocol

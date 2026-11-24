@@ -8,7 +8,9 @@ import {
   YAxis,
 } from "recharts";
 import type { Sample } from "../../types";
+import { withHistoryGaps } from "../../utils/telemetry";
 export function SystemHealth({ history }: { history: Sample[] }) {
+  const chartHistory = withHistoryGaps(history);
   return (
     <>
       <div className="diagnostics-notice">
@@ -54,7 +56,7 @@ export function SystemHealth({ history }: { history: Sample[] }) {
             <div className="health-history-chart">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart
-                  data={history}
+                  data={chartHistory}
                   margin={{ top: 20, right: 20, left: -12, bottom: 5 }}
                 >
                   <CartesianGrid
@@ -96,6 +98,7 @@ export function SystemHealth({ history }: { history: Sample[] }) {
                     stroke={color}
                     strokeWidth={2}
                     dot={false}
+                    connectNulls={false}
                     isAnimationActive={false}
                   />
                 </LineChart>

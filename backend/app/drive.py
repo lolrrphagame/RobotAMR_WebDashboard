@@ -6,6 +6,7 @@ WHEEL_RADIUS = 0.0435
 WHEEL_SEPARATION = 0.300
 ENCODER_CPR = 3960
 MAX_RPM = 40.0
+MAX_ACCELERATION_RPM_S = 60.0
 
 
 def wrap_angle(angle: float) -> float:
@@ -18,13 +19,15 @@ class DriveConfig:
     wheel_separation: float = WHEEL_SEPARATION
     encoder_cpr: int = ENCODER_CPR
     max_rpm: float = MAX_RPM
-    acceleration_rpm_s: float = 60.0
+    acceleration_rpm_s: float = MAX_ACCELERATION_RPM_S
     encoder_polarity: tuple[int, int] = (1, -1)
 
     def __post_init__(self):
-        if min(self.wheel_radius, self.wheel_separation, self.encoder_cpr,
-               self.max_rpm, self.acceleration_rpm_s) <= 0:
-            raise ValueError("Drive parameters must be positive")
+        if not all(math.isfinite(value) and value > 0 for value in (
+            self.wheel_radius, self.wheel_separation, self.encoder_cpr,
+            self.max_rpm, self.acceleration_rpm_s,
+        )):
+            raise ValueError("Drive parameters must be finite and positive")
         if len(self.encoder_polarity) != 2 or any(sign not in (-1, 1) for sign in self.encoder_polarity):
             raise ValueError("Encoder polarity must be +1 or -1")
 
@@ -49,6 +52,24 @@ class DifferentialDrive:
     def forward(self, rpm: list[float]) -> tuple[float, float]:
         left, right = [r * 2 * math.pi * self.config.wheel_radius / 60 for r in rpm]
         return (left + right) / 2, (right - left) / self.config.wheel_separation
+
+    def kinematic_limits(self, autonomous_limits):
+        rpm = self.config.max_rpm
+        slew = self.config.acceleration_rpm_s
+        max_linear, _ = self.forward([rpm, rpm])
+        _, max_angular = self.forward([-rpm, rpm])
+        max_linear_acceleration, _ = self.forward([slew, slew])
+        _, max_angular_acceleration = self.forward([-slew, slew])
+        return {
+            "max_straight_linear": max_linear,
+            "max_in_place_angular": max_angular,
+            "max_straight_acceleration": max_linear_acceleration,
+            "max_in_place_angular_acceleration": max_angular_acceleration,
+            "effective_autonomous_speed_limits": {
+                "max_linear": min(autonomous_limits.max_linear, max_linear),
+                "max_angular": min(autonomous_limits.max_angular, max_angular),
+            },
+        }
 
     def accelerate(self, rpm: list[float], target: list[float], dt: float) -> list[float]:
         delta = self.config.acceleration_rpm_s * dt

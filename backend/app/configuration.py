@@ -2,11 +2,20 @@
 import json
 import os
 import tempfile
+from dataclasses import replace
 from pathlib import Path
 from typing import Literal
 from pydantic import Field
-from .models import AUTONOMOUS_SPEED_LIMIT_RANGES, AutonomousSpeedLimits, Goal, StrictModel
+from .drive import DifferentialDrive, DriveConfig
+from .models import (
+    AUTONOMOUS_SPEED_LIMIT_RANGES, WHEEL_CONSTRAINT_RANGES,
+    AutonomousSpeedLimits, Goal, StrictModel, WheelConstraints,
+)
 from .state import HOME
+
+
+def default_autonomous_speed_limits():
+    return AutonomousSpeedLimits(max_linear=0.13, max_angular=0.8)
 
 
 class ConfigurationError(ValueError):
@@ -21,8 +30,8 @@ class SavedConfiguration(StrictModel):
     version: Literal[1] = 1
     home: Goal = Field(default_factory=lambda: Goal(x=HOME[0], y=HOME[1], yaw=HOME[2], name="Home"))
     waypoints: dict[Literal["A", "B", "C"], Goal] = Field(default_factory=dict)
-    autonomous_speed_limits: AutonomousSpeedLimits = Field(
-        default_factory=lambda: AutonomousSpeedLimits(max_linear=0.13, max_angular=0.8))
+    autonomous_speed_limits: AutonomousSpeedLimits = Field(default_factory=default_autonomous_speed_limits)
+    wheel_constraints: WheelConstraints = Field(default_factory=WheelConstraints)
 
 
 class ConfigurationStore:
@@ -58,8 +67,9 @@ class ConfigurationStore:
 
 
 class ConfigurationManager:
-    def __init__(self, grid, store=None):
+    def __init__(self, grid, store=None, drive_config: DriveConfig | None = None):
         self.grid, self.store = grid, store
+        self.base_drive_config = drive_config or DriveConfig()
         self.value = SavedConfiguration()
         self.warnings = []
         if store is not None:
@@ -92,33 +102,52 @@ class ConfigurationManager:
                                 raw["autonomous_speed_limits"])
                         except ValueError:
                             self.warnings.append("Saved autonomous speed limits are invalid; using simulation defaults.")
+                    if "wheel_constraints" in raw:
+                        try:
+                            self.value.wheel_constraints = WheelConstraints.model_validate(raw["wheel_constraints"])
+                        except ValueError:
+                            self.warnings.append("Saved wheel constraints are invalid; using simulation defaults.")
             except (OSError, ValueError) as exc:
                 self.value = SavedConfiguration()
                 self.warnings.append(f"Configuration could not be restored ({type(exc).__name__}); using defaults. Original file preserved.")
         if not grid.free(self.value.home.x, self.value.home.y):
             raise ValueError("Home pose lacks robot footprint clearance in the supplied map")
+        self.drive = DifferentialDrive(self.effective_drive_config(self.value.wheel_constraints))
+
+    def effective_drive_config(self, constraints):
+        base = self.base_drive_config
+        return replace(base, max_rpm=min(base.max_rpm, constraints.max_rpm),
+                       acceleration_rpm_s=min(base.acceleration_rpm_s, constraints.acceleration_rpm_s))
 
     def validate_pose(self, goal, label):
         if not self.grid.free(goal.x, goal.y):
             raise ValueError(f"{label} ({goal.x:.2f}, {goal.y:.2f}) lacks {self.grid.clearance:.3f} m footprint clearance; choose free space.")
 
-    def commit(self, home=None, waypoints=None, autonomous_speed_limits=None):
+    def commit(self, home=None, waypoints=None, autonomous_speed_limits=None, wheel_constraints=None):
         candidate = SavedConfiguration(
             home=home if home is not None else self.value.home,
             waypoints=waypoints if waypoints is not None else self.value.waypoints,
             autonomous_speed_limits=(autonomous_speed_limits if autonomous_speed_limits is not None
                                      else self.value.autonomous_speed_limits),
+            wheel_constraints=wheel_constraints if wheel_constraints is not None else self.value.wheel_constraints,
         )
         self.validate_pose(candidate.home, "Home")
         for name, goal in candidate.waypoints.items():
             self.validate_pose(goal, f"Waypoint {name}")
+        drive_config = self.effective_drive_config(candidate.wheel_constraints)
         if self.store is not None:
             self.store.write(candidate)
         self.value = candidate
+        self.drive.config = drive_config
         self.warnings = []
 
     def snapshot(self):
+        drive = self.drive.config
         return {**self.value.model_dump(), "simulation": True, "map_id": self.grid.snapshot()["id"],
                 "autonomous_speed_limit_ranges": AUTONOMOUS_SPEED_LIMIT_RANGES,
+                "wheel_constraint_ranges": WHEEL_CONSTRAINT_RANGES,
+                "effective_wheel_constraints": {"max_rpm": drive.max_rpm,
+                                                "acceleration_rpm_s": drive.acceleration_rpm_s},
+                "kinematic_limits": self.drive.kinematic_limits(self.value.autonomous_speed_limits),
                 "storage": "local-file" if self.store is not None else "memory",
                 "load_warnings": self.warnings}

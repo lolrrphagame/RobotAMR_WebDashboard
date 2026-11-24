@@ -11,6 +11,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { HomeConfiguration } from "./HomeConfiguration";
+import { BodyVelocityTable } from "./BodyVelocityTable";
 import { formatTimestamp } from "../utils/telemetry";
 import { NavigationMap } from "./NavigationMap";
 import { MissionSummary } from "./MissionSummary";
@@ -62,14 +63,30 @@ export function NavigationPage({
     return () => controller.abort();
   }, [attempt]);
   const nav = data?.navigation;
-  const active = nav?.status === "running" || nav?.status === "paused";
+  const operation = data?.operations.active;
+  const missionStatus = operation?.status ?? nav?.status;
+  const missionProgress = operation?.progress ?? nav?.progress ?? 0;
+  const waiting = operation?.steps[operation.current_step]?.kind === "wait";
+  const active = missionStatus === "running" || missionStatus === "paused";
   const canPlan =
-    connected && !active && !data?.operations.active && data?.mode !== "MANUAL";
+    connected && !active && data?.mode !== "MANUAL";
+  const limits = data?.configuration.autonomous_speed_limits;
+  const diagnostics = data?.diagnostics;
+  const activeLimits = [
+    diagnostics?.motion.autonomous_limit_active && "autonomous speed caps",
+    diagnostics?.saturation.active && "wheel RPM saturation",
+  ].filter(Boolean).join(" and ");
   const goal = selected ?? { x: 2, y: 1, yaw: 0, name: "Destination" };
   const names: WaypointName[] = ["A", "B", "C"];
   return (
     <>
       <MissionSummary data={data} />
+      {data?.mode === "AUTONOMOUS" && (
+        <div className="navigation-authority" role="status">
+          <strong>{missionStatus === "paused" ? "Autonomous paused — Simulation controller" : "Autonomous active — Simulation controller"}</strong>
+          {operation && <span>Mission Operations reservation{waiting ? " · WAIT step" : ""}</span>}
+        </div>
+      )}
       <div className="navigation-sensor-toggle">
         <label>
           <input
@@ -111,6 +128,15 @@ export function NavigationPage({
               )}
             </section>
           )}
+          <section className="panel navigation-motion" aria-labelledby="navigation-motion-title">
+            <div className="panel-heading"><h2 id="navigation-motion-title">Navigation motion</h2></div>
+            <div className="diagnostic-state-row">
+              <span>Configured autonomous caps <strong>{limits ? `${limits.max_linear} m/s · ${limits.max_angular} rad/s` : "—"}</strong></span>
+              <span>Effective wheel speed limit <strong>{data ? `${data.drive.max_rpm} RPM` : "—"}</strong></span>
+              <span>Active limiting <strong>{diagnostics ? (activeLimits || "Inactive") : "—"}</strong></span>
+            </div>
+            <BodyVelocityTable motion={diagnostics?.motion} />
+          </section>
           <section className="panel nav-events">
             <div className="panel-heading">
               <h2>Mission event stream</h2>
@@ -221,14 +247,14 @@ export function NavigationPage({
                   Start navigation
                 </button>
                 <button
-                  disabled={!connected || nav?.status !== "running"}
+                  disabled={!connected || missionStatus !== "running"}
                   onClick={() => send({ type: "navigation", action: "pause" })}
                 >
                   <Pause size={15} />
                   Pause
                 </button>
                 <button
-                  disabled={!connected || nav?.status !== "paused"}
+                  disabled={!connected || missionStatus !== "paused"}
                   onClick={() => send({ type: "navigation", action: "resume" })}
                 >
                   <Play size={15} />
@@ -238,7 +264,7 @@ export function NavigationPage({
                   disabled={
                     !connected ||
                     !["running", "paused", "ready", "blocked"].includes(
-                      nav?.status ?? "",
+                      missionStatus ?? "",
                     )
                   }
                   onClick={() => send({ type: "navigation", action: "cancel" })}
@@ -272,7 +298,7 @@ export function NavigationPage({
                 <div>
                   <span>Mission state</span>
                   <strong data-testid="navigation-status">
-                    {nav?.status ?? "offline"}
+                    {missionStatus ?? "offline"}
                   </strong>
                 </div>
                 <div>
@@ -291,28 +317,20 @@ export function NavigationPage({
                       : "—"}
                   </strong>
                 </div>
-                <div>
-                  <span>Simulated body velocity</span>
-                  <strong>
-                    {data
-                      ? `${data.linear_velocity.toFixed(2)} m/s · ${data.angular_velocity.toFixed(2)} rad/s`
-                      : "—"}
-                  </strong>
-                </div>
               </div>
               <div className="nav-progress">
                 <div>
                   <span>Mission progress</span>
-                  <strong>{nav?.progress.toFixed(0) ?? "0"}%</strong>
+                  <strong>{missionProgress.toFixed(0)}%</strong>
                 </div>
                 <progress
                   max="100"
-                  value={nav?.progress ?? 0}
+                  value={missionProgress}
                   aria-label="Mission progress"
                 />
               </div>
               <p className="mission-reason" role="status">
-                {nav?.reason ?? "Connect to the simulation service to begin."}
+                {operation ? (operation.reason ?? operation.name) : (nav?.reason ?? "Connect to the simulation service to begin.")}
               </p>
             </div>
           </section>

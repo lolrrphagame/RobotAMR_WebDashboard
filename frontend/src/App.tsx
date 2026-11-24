@@ -102,7 +102,7 @@ function Dashboard() {
           </span>
         </a>
         <div className="workspace-label">
-          WORKSPACE <span>PHASE 5E.1</span>
+          WORKSPACE <span>PHASE 5E.2</span>
         </div>
         <nav aria-label="Main navigation">
           {pages.map(({ name, icon: Icon }) => (
@@ -182,7 +182,7 @@ function Dashboard() {
               <strong>Simulation environment active.</strong> All telemetry and
               controls are simulated. ROS 2, UART and GPIO are disabled.
             </span>
-            <span className="banner-phase">PHASE 5E.1</span>
+            <span className="banner-phase">PHASE 5E.2</span>
           </div>
           {(!connected || error) && (
             <div className="connection-alert" role="status">
@@ -297,6 +297,7 @@ function Dashboard() {
                     readOnly={!operator}
                     connected={connected}
                     authority={live?.mode}
+                    wheelLimit={live?.drive.max_rpm}
                     send={send}
                     stop={stop}
                     release={release}
@@ -391,7 +392,7 @@ function Dashboard() {
                     </div>
                   ))}
                   <div className="encoder-note">
-                    ≈ 3,960 counts / revolution
+                    {live ? `${live.drive.encoder_cpr.toLocaleString()} counts / revolution` : "Encoder resolution unavailable"}
                     <br />
                     Signed quadrature count · simulated
                   </div>
@@ -483,7 +484,6 @@ function Dashboard() {
                         live?.drive.encoder_polarity.join(", ") ?? "+1, -1",
                       ],
                       ["Autonomous heartbeat timeout", "1.5 s"],
-                      ["Encoder resolution", "≈ 3,960 counts/rev"],
                       ["Telemetry rate", "10 Hz"],
                       ["Command timeout", "600 ms"],
                       ["Control heartbeat", "150 ms"],
@@ -517,7 +517,7 @@ function Dashboard() {
                 ? `${Math.floor(live.uptime / 60)}m ${live.uptime % 60}s`
                 : "—"}
               <span className="footer-divider">|</span>
-              <CircleHelp size={14} /> Phase 5E.1
+              <CircleHelp size={14} /> Phase 5E.2
             </span>
           </footer>
         </div>

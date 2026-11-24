@@ -1,3 +1,4 @@
+import { BodyVelocityTable } from "../BodyVelocityTable";
 import { RpmChart } from "../RpmChart";
 import type { Sample, Telemetry } from "../../types";
 export function MotorDiagnostics({
@@ -11,8 +12,7 @@ export function MotorDiagnostics({
   return (
     <>
       <div className="diagnostics-notice">
-        SIMULATED MEASUREMENTS · Acceleration-limited wheel dynamics. This is
-        not the ESP32 firmware PI controller.
+        SIMULATED MEASUREMENTS · Acceleration-limited wheel dynamics.
       </div>
       <div className="motor-diagnostics-grid">
         {["Left", "Right"].map((name, i) => {
@@ -72,32 +72,7 @@ export function MotorDiagnostics({
           <h2>Commanded versus measured motion</h2>
           <span className="tag">SIMULATION</span>
         </div>
-        <div className="diagnostic-table-wrap">
-          <table className="diagnostic-table">
-            <thead>
-              <tr>
-                <th>Motion stage</th>
-                <th>Linear (m/s)</th>
-                <th>Angular (rad/s)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(["requested", "limited", "measured"] as const).map((stage) => (
-                <tr key={stage}>
-                  <td>
-                    {stage === "limited"
-                      ? "After applicable speed limits"
-                      : stage === "requested"
-                        ? "Requested command"
-                        : "Simulated measurement"}
-                  </td>
-                  <td>{diag?.motion[stage].linear.toFixed(4) ?? "—"}</td>
-                  <td>{diag?.motion[stage].angular.toFixed(4) ?? "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <BodyVelocityTable motion={diag?.motion} />
         <div className="diagnostic-state-row">
           <span>
             Control authority <strong>{data?.mode ?? "—"}</strong>
@@ -127,7 +102,7 @@ export function MotorDiagnostics({
             </strong>
           </span>
           <span>
-            Wheel limit <strong>{diag?.saturation.limit_rpm ?? 40} RPM</strong>
+            Wheel limit <strong>{diag ? `${diag.saturation.limit_rpm} RPM` : "—"}</strong>
           </span>
           <span>
             Pose clearance{" "}
@@ -183,7 +158,7 @@ export function MotorDiagnostics({
                 <th>Kp</th>
                 <th>Ki</th>
                 <th>PWM</th>
-                <th>Control error</th>
+                <th>Firmware control error</th>
                 <th>Integral term</th>
               </tr>
             </thead>
@@ -201,6 +176,19 @@ export function MotorDiagnostics({
             </tbody>
           </table>
         </div>
+      </section>
+      <section className="panel" aria-labelledby="integration-status-title">
+        <div className="panel-heading"><h2 id="integration-status-title">Integration status</h2></div>
+        <dl className="diagnostic-values integration-status">
+          <div><dt>Current backend</dt><dd>{diag?.integration_status.backend === "simulation" ? "Simulation" : "—"}</dd></div>
+          {([
+            ["ROS 2", "ros2_connected"],
+            ["Nav2", "nav2_connected"],
+            ["ESP32-S3 hardware telemetry", "esp32_s3_connected"],
+          ] as const).map(([label, key]) => (
+            <div key={key}><dt>{label}</dt><dd>{diag ? (diag.integration_status[key] ? "Connected" : "Not connected") : "—"}</dd></div>
+          ))}
+        </dl>
       </section>
     </>
   );

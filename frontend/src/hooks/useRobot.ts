@@ -19,7 +19,6 @@ export function useRobot() {
   const authorized = useRef(false);
   const stopGeneration = useRef<number | null>(null);
   const socket = useRef<WebSocket | null>(null);
-  const session = useRef<string | null>(null);
   const command = useRef<Command>({ type: "stop" });
   const send = useCallback((next: Command) => {
     if (!authorized.current) return;
@@ -58,10 +57,22 @@ export function useRobot() {
         `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/telemetry`,
       );
       socket.current = ws;
+      const historyRequest = new AbortController();
+      let socketSession: string | undefined;
+      let backfill: { samples: Sample[]; sessionId: string } | undefined;
+      const mergeBackfill = () => {
+        if (!backfill || !socketSession) return;
+        const { samples, sessionId } = backfill;
+        backfill = undefined;
+        // Only the live socket can establish which backend session is current.
+        if (sessionId !== socketSession) return;
+        setHistory((old) => mergeHistory([...samples, ...old], sessionId));
+        setHistoryError("");
+      };
       ws.onopen = () => {
         lastMessage = Date.now();
         setError("");
-        fetch("/api/diagnostics/history")
+        fetch("/api/diagnostics/history", { signal: historyRequest.signal })
           .then(async (response) => {
             if (!response.ok)
               throw Error(
@@ -76,20 +87,19 @@ export function useRobot() {
               socket.current === ws &&
               ws.readyState === WebSocket.OPEN
             ) {
-              const changed =
-                session.current !== null && session.current !== body.session_id;
-              session.current = body.session_id;
-              setHistory((old) =>
-                mergeHistory(
-                  changed ? [] : old,
-                  body.samples.map(historyToSample),
-                ),
-              );
-              setHistoryError("");
+              backfill = {
+                sessionId: body.session_id,
+                samples: body.samples.map(historyToSample),
+              };
+              mergeBackfill();
             }
           })
           .catch(() => {
-            if (!disposed)
+            if (
+              !disposed &&
+              socket.current === ws &&
+              !historyRequest.signal.aborted
+            )
               setHistoryError(
                 "Historical data unavailable; showing samples received in this browser.",
               );
@@ -116,6 +126,9 @@ export function useRobot() {
           )
             throw Error("Unexpected telemetry");
           const next = message as Telemetry;
+          const sample = frameToSample(next);
+          if (!sample.sessionId || !Number.isFinite(sample.epochMs))
+            throw Error("Invalid telemetry timestamp or session");
           const generation = next.diagnostics.safety.stop_generation ?? 0;
           if (
             next.mode === "AUTONOMOUS" ||
@@ -127,12 +140,9 @@ export function useRobot() {
           lastMessage = Date.now();
           setConnection("connected");
           setData(next);
-          const changed =
-            session.current !== null && session.current !== next.session_id;
-          session.current = next.session_id;
-          setHistory((old) =>
-            mergeHistory(changed ? [] : old, [frameToSample(next)]),
-          );
+          socketSession = next.session_id;
+          setHistory((old) => mergeHistory([...old, sample], next.session_id));
+          mergeBackfill();
         } catch {
           setError("Invalid telemetry received. Reconnecting safely.");
           stop();
@@ -146,6 +156,8 @@ export function useRobot() {
         );
       };
       ws.onclose = (event) => {
+        historyRequest.abort();
+        if (socket.current !== ws) return;
         command.current = { type: "stop" };
         if (!disposed) {
           if (event.code === 1008) {

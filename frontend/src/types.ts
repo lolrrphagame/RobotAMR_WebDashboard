@@ -17,13 +17,22 @@ export interface Telemetry {
   trajectory: [number, number][];
   navigation: NavigationState;
   operations: {
-    active: { id: string; status: string } | null;
+    active: {
+      id: string;
+      name: string;
+      status: "running" | "paused";
+      progress: number;
+      reason: string | null;
+      current_step: number;
+      steps: { kind: "waypoint" | "home" | "pose" | "wait" }[];
+    } | null;
     queue_count: number;
   };
   drive: {
     max_rpm: number;
     wheel_radius: number;
     wheel_separation: number;
+    encoder_cpr: number;
     acceleration_rpm_s: number;
     chassis_size: number;
     encoder_polarity: [number, number];
@@ -61,14 +70,24 @@ export interface Telemetry {
 export interface Sample {
   time: string;
   timestamp: string;
-  cpu: number;
-  ram: number;
-  temperature: number;
-  battery: number;
-  leftTarget: number;
-  leftActual: number;
-  rightTarget: number;
-  rightActual: number;
+  sessionId: string;
+  epochMs: number;
+  cpu: number | null;
+  ram: number | null;
+  temperature: number | null;
+  battery: number | null;
+  leftTarget: number | null;
+  leftActual: number | null;
+  rightTarget: number | null;
+  rightActual: number | null;
+  leftError: number | null;
+  rightError: number | null;
+  requestedLinear: number | null;
+  limitedLinear: number | null;
+  measuredLinear: number | null;
+  requestedAngular: number | null;
+  limitedAngular: number | null;
+  measuredAngular: number | null;
 }
 export interface Pose {
   x: number;
@@ -110,6 +129,10 @@ export interface AutonomousSpeedLimits {
   max_linear: number;
   max_angular: number;
 }
+export interface WheelConstraints {
+  max_rpm: number;
+  acceleration_rpm_s: number;
+}
 export interface RobotConfiguration {
   version: 1;
   home: Goal;
@@ -119,27 +142,50 @@ export interface RobotConfiguration {
     keyof AutonomousSpeedLimits,
     { min: number; max: number }
   >;
+  wheel_constraints: WheelConstraints;
+  wheel_constraint_ranges: Record<
+    keyof WheelConstraints,
+    { min: number; max: number }
+  >;
+  effective_wheel_constraints: WheelConstraints;
+  kinematic_limits: {
+    max_straight_linear: number;
+    max_in_place_angular: number;
+    max_straight_acceleration: number;
+    max_in_place_angular_acceleration: number;
+    effective_autonomous_speed_limits: AutonomousSpeedLimits;
+  };
   storage: "local-file" | "memory";
   load_warnings: string[];
 }
 export interface HistoryRecord {
   timestamp: string;
-  left_target_rpm: number;
-  left_actual_rpm: number;
-  right_target_rpm: number;
-  right_actual_rpm: number;
-  cpu_percent: number;
-  memory_percent: number;
-  temperature_c: number;
-  battery_percent: number;
+  session_id: string;
+  left_target_rpm?: number | null;
+  left_actual_rpm?: number | null;
+  right_target_rpm?: number | null;
+  right_actual_rpm?: number | null;
+  left_error_rpm?: number | null;
+  right_error_rpm?: number | null;
+  requested_linear?: number | null;
+  limited_linear?: number | null;
+  linear_velocity?: number | null;
+  requested_angular?: number | null;
+  limited_angular?: number | null;
+  angular_velocity?: number | null;
+  cpu_percent?: number | null;
+  memory_percent?: number | null;
+  temperature_c?: number | null;
+  battery_percent?: number | null;
 }
+export type BodyVelocity = { linear: number; angular: number };
 export interface Diagnostics {
   source: "simulation";
   model: string;
   motion: {
-    requested: { linear: number; angular: number };
-    limited: { linear: number; angular: number };
-    measured: { linear: number; angular: number };
+    requested: BodyVelocity;
+    limited: BodyVelocity;
+    measured: BodyVelocity;
     limit_active: boolean;
     autonomous_limit_active: boolean;
   };
@@ -161,6 +207,12 @@ export interface Diagnostics {
     autonomous_limits_blocked_reason: string | null;
   };
   counters: Record<string, number>;
+  integration_status: {
+    backend: "simulation";
+    ros2_connected: false;
+    nav2_connected: false;
+    esp32_s3_connected: false;
+  };
   interfaces: {
     ros2: {
       source: "disabled";

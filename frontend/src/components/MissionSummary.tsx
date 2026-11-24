@@ -2,6 +2,9 @@ import type { Telemetry } from "../types";
 export function MissionSummary({ data }: { data: Telemetry | null }) {
   const pose = data?.pose,
     nav = data?.navigation;
+  const operation = data?.operations.active;
+  const status = operation?.status ?? nav?.status;
+  const progress = operation?.progress ?? nav?.progress;
   return (
     <section
       className="panel pose-strip"
@@ -21,16 +24,16 @@ export function MissionSummary({ data }: { data: Telemetry | null }) {
       </div>
       <div>
         <span>CONTROL AUTHORITY</span>
-        <strong>{data?.mode ?? "OFFLINE"}</strong>
+        <strong data-testid="control-authority">{data?.mode ?? "OFFLINE"}</strong>
       </div>
       <div>
-        <span>MISSION / {nav?.current_waypoint ?? "NO DESTINATION"}</span>
+        <span>MISSION / {operation ? "OPERATIONS" : (nav?.current_waypoint ?? "NO DESTINATION")}</span>
         <strong
           data-testid="mission-status"
-          className={`mission-state ${nav?.status}`}
+          className={`mission-state ${status ?? ""}`}
         >
-          {nav?.status ?? "OFFLINE"}
-          {nav ? ` · ${nav.progress.toFixed(0)}%` : ""}
+          {status ?? "OFFLINE"}
+          {progress === undefined ? "" : ` · ${progress.toFixed(0)}%`}
         </strong>
       </div>
     </section>

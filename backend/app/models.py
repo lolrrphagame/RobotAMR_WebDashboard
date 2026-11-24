@@ -1,5 +1,6 @@
 from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
+from .drive import MAX_ACCELERATION_RPM_S, MAX_RPM
 
 
 class StrictModel(BaseModel):
@@ -62,11 +63,25 @@ class AutonomousSpeedLimits(StrictModel):
                                le=AUTONOMOUS_SPEED_LIMIT_RANGES["max_angular"]["max"])
 
 
+WHEEL_CONSTRAINT_RANGES = {
+    "max_rpm": {"min": 10, "max": MAX_RPM},
+    "acceleration_rpm_s": {"min": 10, "max": MAX_ACCELERATION_RPM_S},
+}
+
+
+class WheelConstraints(StrictModel):
+    max_rpm: float = Field(default=MAX_RPM, strict=True, ge=WHEEL_CONSTRAINT_RANGES["max_rpm"]["min"], le=MAX_RPM)
+    acceleration_rpm_s: float = Field(default=MAX_ACCELERATION_RPM_S, strict=True,
+                                      ge=WHEEL_CONSTRAINT_RANGES["acceleration_rpm_s"]["min"], le=MAX_ACCELERATION_RPM_S)
+
+
 class ConfigurationCommand(StrictModel):
     type: Literal["configuration"]
-    action: Literal["set_home", "current_home", "reset_home", "set_autonomous_speed_limits"]
+    action: Literal["set_home", "current_home", "reset_home", "set_autonomous_speed_limits",
+                    "set_motion_settings", "restore_motion_defaults"]
     goal: Goal | None = None
     autonomous_speed_limits: AutonomousSpeedLimits | None = None
+    wheel_constraints: WheelConstraints | None = None
 
     @model_validator(mode="after")
     def validate_action(self):
@@ -75,8 +90,18 @@ class ConfigurationCommand(StrictModel):
         if self.action == "set_autonomous_speed_limits":
             if self.autonomous_speed_limits is None or self.goal is not None:
                 raise ValueError("Provide both autonomous speed limits without a Home pose")
+        elif self.action == "set_motion_settings":
+            if self.goal is not None or (self.autonomous_speed_limits is None and self.wheel_constraints is None):
+                raise ValueError("Provide autonomous speed limits, wheel constraints, or both without a Home pose")
         elif self.autonomous_speed_limits is not None:
-            raise ValueError("Use set_autonomous_speed_limits to change autonomous speed limits")
+            raise ValueError("Use a motion settings action to change autonomous speed limits")
+        if self.wheel_constraints is not None:
+            if self.action != "set_motion_settings":
+                raise ValueError("Use set_motion_settings to change wheel constraints")
+            if self.wheel_constraints.model_fields_set != set(WHEEL_CONSTRAINT_RANGES):
+                raise ValueError("Provide both wheel constraints")
+        if self.action == "restore_motion_defaults" and self.goal is not None:
+            raise ValueError("Restoring motion defaults does not accept a Home pose")
         return self
 
 

@@ -10,6 +10,7 @@ import type { Command, MotionAuthority } from "../types";
 export function ManualControl({
   connected,
   authority,
+  wheelLimit,
   readOnly = false,
   send,
   stop,
@@ -17,6 +18,7 @@ export function ManualControl({
 }: {
   connected: boolean;
   authority?: MotionAuthority;
+  wheelLimit?: number;
   readOnly?: boolean;
   send: (c: Command) => void;
   stop: () => void;
@@ -182,7 +184,7 @@ export function ManualControl({
       </div>
       <div className="safety-note">
         <span className="status-dot" />
-        40 RPM wheel limit · simulation only
+        {wheelLimit === undefined ? "Wheel limit unavailable" : `${wheelLimit} RPM wheel limit`} · simulation only
       </div>
     </section>
   );

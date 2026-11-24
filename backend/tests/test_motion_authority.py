@@ -150,6 +150,9 @@ def test_configuration_updates_are_blocked_until_motion_and_missions_are_inactiv
             assert client.post("/api/configuration", json=limit_update()).status_code == 409
         assert client.get("/api/configuration").json()["autonomous_speed_limits"] == DEFAULT_LIMITS
         client.portal.call(robot.command, ControlCommand(type="stop"), "other")
+        if state == "manual":
+            assert client.post("/api/configuration", json=limit_update()).status_code == 409
+            client.portal.call(robot.command, ControlCommand(type="release"), "owner")
         assert client.post("/api/configuration", json=limit_update()).status_code == 200
         assert robot.safety["stop_active"] and robot.safety["stop_generation"] == 1
 

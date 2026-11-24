@@ -79,17 +79,20 @@ def test_client_role_claim_and_invalid_cookie_never_grant_access(secured):
     assert client.post('/api/configuration',json={},headers={'Origin':'https://robot.test'}).status_code==403
 
 
-def test_observer_can_read_but_cannot_save_autonomous_speed_limits(secured):
+@pytest.mark.parametrize('update', [
+    {'action': 'set_autonomous_speed_limits', 'autonomous_speed_limits': {'max_linear': 0.06, 'max_angular': 0.3}},
+    {'action': 'set_motion_settings', 'wheel_constraints': {'max_rpm': 15, 'acceleration_rpm_s': 20}},
+    {'action': 'restore_motion_defaults'},
+])
+def test_observer_can_read_but_cannot_change_motion_settings(secured, update):
     client, _ = secured
     headers = sign_in(client, 'viewer')
-    baseline = client.get('/api/configuration').json()['autonomous_speed_limits']
-    assert baseline == {'max_linear': 0.13, 'max_angular': 0.8}
-    response = client.post('/api/configuration', headers=headers, json={
-        'type': 'configuration', 'action': 'set_autonomous_speed_limits',
-        'autonomous_speed_limits': {'max_linear': 0.06, 'max_angular': 0.3},
-    })
+    baseline = client.get('/api/configuration').json()
+    assert baseline['autonomous_speed_limits'] == {'max_linear': 0.13, 'max_angular': 0.8}
+    assert baseline['wheel_constraints'] == {'max_rpm': 40, 'acceleration_rpm_s': 60}
+    response = client.post('/api/configuration', headers=headers, json={'type': 'configuration', **update})
     assert response.status_code == 403
-    assert client.get('/api/configuration').json()['autonomous_speed_limits'] == baseline
+    assert client.get('/api/configuration').json() == baseline
 
 
 @pytest.mark.parametrize('name', ['alice', 'viewer'])
@@ -111,6 +114,9 @@ def test_expiration_closes_both_roles_and_both_streams(secured,name,path):
     {'type': 'configuration', 'action': 'reset_home'},
     {'type': 'configuration', 'action': 'set_autonomous_speed_limits',
      'autonomous_speed_limits': {'max_linear': 0.06, 'max_angular': 0.3}},
+    {'type': 'configuration', 'action': 'set_motion_settings',
+     'wheel_constraints': {'max_rpm': 15, 'acceleration_rpm_s': 20}},
+    {'type': 'configuration', 'action': 'restore_motion_defaults'},
 ])
 def test_observer_socket_rejects_every_control_category(secured, command):
     client, _ = secured

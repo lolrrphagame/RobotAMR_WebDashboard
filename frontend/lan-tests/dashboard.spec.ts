@@ -86,8 +86,11 @@ test("anonymous sees only login; authenticated Observer monitors without control
   await expect(angularCap).toHaveValue("0.8");
   await expect(linearCap).toBeDisabled();
   await expect(angularCap).toBeDisabled();
+  await expect(motion.getByLabel("Maximum wheel speed (RPM)")).toHaveValue("40");
+  await expect(motion.getByRole("slider", { name: "Adjust maximum wheel speed" })).toBeDisabled();
+  await expect(motion.getByRole("button", { name: "Restore Motion Defaults" })).toBeDisabled();
   await expect(
-    motion.getByRole("button", { name: "Save autonomous limits" }),
+    motion.getByRole("button", { name: "Save motion settings" }),
   ).toBeDisabled();
   await expect(motion.getByText(/Observer access is read-only/)).toBeVisible();
   expect(
@@ -142,14 +145,16 @@ test("trusted HTTPS operator login, WSS, STOP, refresh and logout", async ({
     name: "Motion Control & Speed Limits",
   });
   await motion.getByLabel("Maximum linear speed (m/s)").fill("0.1");
-  await motion.getByRole("button", { name: "Save autonomous limits" }).click();
+  await motion.getByLabel("Maximum wheel speed (RPM)").fill("26");
+  await motion.getByRole("button", { name: "Save motion settings" }).click();
   await expect(motion.getByRole("status")).toHaveText(
-    "Autonomous speed limits saved.",
+    "Motion settings saved.",
   );
   await page.reload();
   await expect(motion.getByLabel("Maximum linear speed (m/s)")).toHaveValue(
     "0.1",
   );
+  await expect(motion.getByLabel("Maximum wheel speed (RPM)")).toHaveValue("26");
   for (const path of ["/navigation", "/missions"]) {
     await page.goto(path);
     await expect(page.getByText("Stream connected")).toBeVisible();

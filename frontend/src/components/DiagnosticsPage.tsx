@@ -3,6 +3,7 @@ import { Download } from "lucide-react";
 import type { Sample, Telemetry } from "../types";
 import { downloadCsv, formatTimestamp } from "../utils/telemetry";
 import { MotorDiagnostics } from "./diagnostics/MotorDiagnostics";
+import { MotionAnalysis } from "./diagnostics/MotionAnalysis";
 import { SystemHealth } from "./diagnostics/SystemHealth";
 import { Communication } from "./diagnostics/Communication";
 import { Events } from "./diagnostics/Events";
@@ -83,7 +84,7 @@ export function DiagnosticsPage({
         role="tablist"
         aria-label="Diagnostics sections"
       >
-        {["Motors", "System Health", "Communication", "Events"].map((name) => (
+        {["Motors", "Motion Analysis", "System Health", "Communication", "Events"].map((name) => (
           <button
             role="tab"
             aria-selected={tab === name}
@@ -103,6 +104,7 @@ export function DiagnosticsPage({
         aria-labelledby={`diagnostics-${tab.replaceAll(" ", "-")}`}
       >
         {tab === "Motors" && <MotorDiagnostics data={data} history={history} />}
+        {tab === "Motion Analysis" && <MotionAnalysis history={history} />}
         {tab === "System Health" && <SystemHealth history={history} />}
         {tab === "Communication" && <Communication data={data} />}
         {tab === "Events" && <Events events={events} />}

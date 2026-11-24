@@ -42,7 +42,7 @@ def diagnostics(robot):
     age = None
     if robot.owner is not None:
         age = max(0, (time.monotonic() - (robot.last_lease if robot.autonomous_active else robot.last_command)) * 1000)
-    return {"source": "simulation", "model": "Acceleration-limited differential drive; not firmware PI",
+    return {"source": "simulation", "model": "Acceleration-limited differential drive",
             "motion": {"requested": {"linear": robot.linear, "angular": robot.angular},
                        "limited": {"linear": limited_v, "angular": limited_w},
                        "measured": {"linear": measured_v, "angular": measured_w},
@@ -53,16 +53,19 @@ def diagnostics(robot):
             "safety": {**robot.safety, "command_age_ms": age, "manual_timeout_ms": 600,
                        "autonomous_timeout_ms": 1500, "collision_guard": robot.collision_origin is not None,
                        "autonomous_limits_blocked_reason": robot.autonomous_limits_blocked_reason()},
-            "counters": dict(robot.counters), "interfaces": interfaces()}
+            "counters": dict(robot.counters), "interfaces": interfaces(),
+            "integration_status": {"backend": "simulation", "ros2_connected": False,
+                                   "nav2_connected": False, "esp32_s3_connected": False}}
 
 
 def history_sample(frame):
     left, right = frame["motors"]
+    motion = frame["diagnostics"]["motion"]
     return {"timestamp": frame["timestamp"], "session_id": frame["session_id"], "source": "simulation", "mode": frame["mode"],
             "x": frame["pose"]["x"], "y": frame["pose"]["y"], "yaw": frame["pose"]["yaw"],
             "linear_velocity": frame["linear_velocity"], "angular_velocity": frame["angular_velocity"],
-            "requested_linear": frame["diagnostics"]["motion"]["requested"]["linear"],
-            "requested_angular": frame["diagnostics"]["motion"]["requested"]["angular"],
+            "requested_linear": motion["requested"]["linear"], "requested_angular": motion["requested"]["angular"],
+            "limited_linear": motion["limited"]["linear"], "limited_angular": motion["limited"]["angular"],
             "left_target_rpm": left["target_rpm"], "left_actual_rpm": left["actual_rpm"],
             "right_target_rpm": right["target_rpm"], "right_actual_rpm": right["actual_rpm"],
             "left_error_rpm": left["tracking_error_rpm"], "right_error_rpm": right["tracking_error_rpm"],

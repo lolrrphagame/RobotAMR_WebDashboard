@@ -5,13 +5,13 @@ import time
 from collections import deque
 from datetime import datetime, timezone
 from uuid import uuid4
-from .drive import DifferentialDrive, DriveConfig, WHEEL_RADIUS, WHEEL_SEPARATION, ENCODER_CPR
+from .drive import DriveConfig, WHEEL_RADIUS, WHEEL_SEPARATION, ENCODER_CPR
 from .mission import MissionManager
-from .models import AutonomousSpeedLimits, ControlCommand, NavigationCommand, Goal, WaypointCommand, ConfigurationCommand
+from .models import ControlCommand, NavigationCommand, Goal, WaypointCommand, ConfigurationCommand, WheelConstraints
 from .navigation import OccupancyGrid
 from .state import HOME, RobotState
 from .telemetry import snapshot
-from .configuration import ConfigurationManager, ConfigurationError, ConfigurationConflict
+from .configuration import ConfigurationManager, ConfigurationError, ConfigurationConflict, default_autonomous_speed_limits
 from .diagnostics import history_sample
 from .sensors.manager import SensorManager
 from .operations import Operations, OperationsCommand
@@ -27,13 +27,15 @@ class RobotSimulator:
         self.sample_timestamp = datetime.now(timezone.utc).isoformat()
         self.sample_uptime = 0.0
         self.inhibited_clients = set()
+        # A safety halt can stop the wheels before the controlling input is released.
+        self.manual_release_pending = set()
         self.last_command = self.last_lease = 0.0
         self.owner = None
         self.linear = self.angular = 0.0
         self.state = RobotState()
-        self.drive = DifferentialDrive(config)
         self.grid = grid or OccupancyGrid()
-        self.configuration = ConfigurationManager(self.grid, store)
+        self.configuration = ConfigurationManager(self.grid, store, config)
+        self.drive = self.configuration.drive
         home = self.configuration.value.home
         self.state = RobotState(pose=(home.x, home.y, home.yaw),
                                 trajectory=deque([(home.x, home.y)], maxlen=1200))
@@ -85,6 +87,8 @@ class RobotSimulator:
         self.safety["stop_generation"] = self.safety.get("stop_generation",0)+1
         self.safety.update(stop_active=True, last_stop_reason=reason, watchdog="disarmed")
         self.counters["stop_commands"] += 1
+        if self.owner is not None and not self.autonomous_active:
+            self.manual_release_pending.add(self.owner)
         self.halt()
         if self.owner is not None:self.inhibited_clients.add(self.owner)
         self.operations.finish("cancelled",reason)
@@ -103,6 +107,8 @@ class RobotSimulator:
         source = "Autonomous navigation" if autonomous else "Manual motion"
         if not autonomous:
             self.manual_collision_command = (self.owner, self.linear, self.angular)
+            if self.owner is not None:
+                self.manual_release_pending.add(self.owner)
         x, y = self.state.pose[:2]
         reason = (f"{source} collision prevented at ({x:.2f}, {y:.2f}) m: "
                   f"{self.grid.clearance:.3f} m footprint clearance required. Motion stopped. ")
@@ -123,6 +129,7 @@ class RobotSimulator:
 
     def release(self, client, reason="Manual input released"):
         self.inhibited_clients.discard(client)
+        self.manual_release_pending.discard(client)
         if self.manual_collision_command and self.manual_collision_command[0] == client:
             self.manual_collision_command = None
         if self.owner == client and not self.autonomous_active:
@@ -133,6 +140,7 @@ class RobotSimulator:
 
     def disconnect(self, client):
         self.inhibited_clients.discard(client)
+        self.manual_release_pending.discard(client)
         if self.manual_collision_command and self.manual_collision_command[0] == client:
             self.manual_collision_command = None
         if self.owner != client:
@@ -162,7 +170,11 @@ class RobotSimulator:
             return True
         if isinstance(command, ConfigurationCommand):
             if command.action == "set_autonomous_speed_limits":
-                return self.configure_autonomous_speed_limits(command.autonomous_speed_limits)
+                return self.configure_motion(command.autonomous_speed_limits)
+            if command.action == "set_motion_settings":
+                return self.configure_motion(command.autonomous_speed_limits, command.wheel_constraints)
+            if command.action == "restore_motion_defaults":
+                return self.configure_motion(default_autonomous_speed_limits(), WheelConstraints())
             return self.configure_home(command)
         if isinstance(command, WaypointCommand):
             self.counters["configuration_commands"] += 1
@@ -206,7 +218,7 @@ class RobotSimulator:
         if self.mission.status != "idle":
             self.mission.reset("Mission cleared for manual control", outcome="cancelled")
         if self.owner is None and self.collision_origin is None:
-            self.log("info", "Manual simulation command engaged (40 RPM wheel limit)")
+            self.log("info", f"Manual simulation command engaged ({self.drive.config.max_rpm:g} RPM wheel limit)")
         self.safety.update(stop_active=False, watchdog="armed_manual")
         self.owner = client
         self.linear, self.angular = command.linear, command.angular
@@ -228,21 +240,23 @@ class RobotSimulator:
         return True
 
     def autonomous_limits_blocked_reason(self) -> str | None:
+        if self.operations.active:
+            return "Motion settings cannot change during an active Mission Operations reservation, including a running or paused mission or a WAIT step."
         if self.autonomous_active:
-            return "Autonomous speed limits cannot change during a running or paused mission."
-        if self.owner is not None or self.linear or self.angular or any(self.rpm):
+            return "Motion settings cannot change during a running or paused mission."
+        if self.owner is not None or self.manual_release_pending or self.linear or self.angular or any(self.rpm):
             return "Release manual input and wait for the simulated robot to stop before saving."
         return None
 
-    def configure_autonomous_speed_limits(self, limits: AutonomousSpeedLimits):
+    def configure_motion(self, limits=None, wheel_constraints=None):
         self.counters["configuration_commands"] += 1
         if reason := self.autonomous_limits_blocked_reason():
             raise ConfigurationConflict(reason)
         try:
-            self.configuration.commit(autonomous_speed_limits=limits)
+            self.configuration.commit(autonomous_speed_limits=limits, wheel_constraints=wheel_constraints)
         except ValueError as exc:
             raise ConfigurationError(str(exc)) from exc
-        self.log("info", "Autonomous speed limits saved for simulation.")
+        self.log("info", "Motion settings saved for simulation.")
         return True
 
     def navigate(self, command, client):

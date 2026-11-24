@@ -861,6 +861,22 @@ h1 {
   color: var(--text-secondary);
   font-size: 12px;
 }
+.motion-limit-fields .motion-limit-slider {
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  accent-color: var(--accent-text);
+}
+.motion-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.motion-settings-actions .secondary-button {
+  margin-top: 0;
+}
 .motion-limit-form button {
   border-radius: 7px;
   padding: 9px 14px;
@@ -2075,6 +2091,115 @@ h1 {
   color: var(--text-secondary);
   line-height: 1.9;
   padding: 15px 21px;
+}
+.navigation-authority {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 14px;
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--accent-border);
+  border-radius: 8px;
+  background: var(--accent-wash);
+  color: var(--accent-text);
+  font-size: 13px;
+}
+.navigation-authority span {
+  color: var(--text-secondary);
+}
+.navigation-motion .diagnostic-state-row {
+  border-top: 0;
+  margin-top: 0;
+  padding-block: 12px;
+}
+.navigation-motion .body-velocity-table {
+  margin-top: 4px;
+}
+.body-velocity-table th,
+.motion-constraints .diagnostic-table th,
+.motion-statistics th {
+  white-space: normal;
+}
+.navigation-motion .diagnostic-state-row strong {
+  text-transform: none;
+}
+.integration-status {
+  margin-top: 12px;
+}
+.motion-analysis-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.motion-analysis-toolbar h2,
+.motion-chart h3 {
+  font-size: 16px;
+  font-weight: 600;
+}
+.motion-analysis-toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.motion-analysis-toolbar select {
+  color: var(--text-primary);
+  background: var(--surface-inset);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  min-height: 40px;
+  padding: 0 10px;
+}
+.motion-comparisons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 22px;
+}
+.motion-comparisons strong {
+  color: var(--text-primary);
+}
+.motion-chart-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.motion-chart .chart-legend {
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+.chart-legend .motion-series-swatch {
+  width: 18px;
+  height: 0;
+  border-top-width: 2px;
+  border-radius: 0;
+}
+.motion-chart-empty {
+  display: grid;
+  place-items: center;
+  min-height: 150px;
+  padding: 15px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.motion-statistics th small {
+  white-space: nowrap;
+}
+@media (max-width: 900px) {
+  .motion-chart-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 560px) {
+  .body-velocity-table .diagnostic-table :is(th, td),
+  .motion-constraints .diagnostic-table :is(th, td),
+  .motion-statistics :is(th, td) {
+    padding-inline: 8px;
+  }
+  .motion-statistics :is(th, td) {
+    font-size: 12px;
+  }
 }
 .health-history-chart {
   height: 230px;
