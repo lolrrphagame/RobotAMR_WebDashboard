@@ -1,10 +1,12 @@
 import type { SensorBundle } from "./sensors";
+export type MotionAuthority = "STANDBY" | "MANUAL" | "AUTONOMOUS";
+
 export interface Telemetry {
   type: "telemetry";
   simulation: true;
   session_id: string;
   timestamp: string;
-  mode: string;
+  mode: MotionAuthority;
   uptime: number;
   pose: Pose & { frame_id: string };
   home: Pose;
@@ -20,6 +22,9 @@ export interface Telemetry {
   };
   drive: {
     max_rpm: number;
+    wheel_radius: number;
+    wheel_separation: number;
+    acceleration_rpm_s: number;
     chassis_size: number;
     encoder_polarity: [number, number];
   };
@@ -101,10 +106,19 @@ export interface OccupancyGrid {
   data: number[];
   clearance_radius: number;
 }
+export interface AutonomousSpeedLimits {
+  max_linear: number;
+  max_angular: number;
+}
 export interface RobotConfiguration {
   version: 1;
   home: Goal;
   waypoints: Partial<Record<WaypointName, Goal>>;
+  autonomous_speed_limits: AutonomousSpeedLimits;
+  autonomous_speed_limit_ranges: Record<
+    keyof AutonomousSpeedLimits,
+    { min: number; max: number }
+  >;
   storage: "local-file" | "memory";
   load_warnings: string[];
 }
@@ -126,6 +140,8 @@ export interface Diagnostics {
     requested: { linear: number; angular: number };
     limited: { linear: number; angular: number };
     measured: { linear: number; angular: number };
+    limit_active: boolean;
+    autonomous_limit_active: boolean;
   };
   saturation: {
     active: boolean;
@@ -142,6 +158,7 @@ export interface Diagnostics {
     manual_timeout_ms: number;
     autonomous_timeout_ms: number;
     collision_guard: boolean;
+    autonomous_limits_blocked_reason: string | null;
   };
   counters: Record<string, number>;
   interfaces: {

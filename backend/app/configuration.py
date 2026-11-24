@@ -5,7 +5,7 @@ import tempfile
 from pathlib import Path
 from typing import Literal
 from pydantic import Field
-from .models import Goal, StrictModel
+from .models import AUTONOMOUS_SPEED_LIMIT_RANGES, AutonomousSpeedLimits, Goal, StrictModel
 from .state import HOME
 
 
@@ -21,6 +21,8 @@ class SavedConfiguration(StrictModel):
     version: Literal[1] = 1
     home: Goal = Field(default_factory=lambda: Goal(x=HOME[0], y=HOME[1], yaw=HOME[2], name="Home"))
     waypoints: dict[Literal["A", "B", "C"], Goal] = Field(default_factory=dict)
+    autonomous_speed_limits: AutonomousSpeedLimits = Field(
+        default_factory=lambda: AutonomousSpeedLimits(max_linear=0.13, max_angular=0.8))
 
 
 class ConfigurationStore:
@@ -84,6 +86,12 @@ class ConfigurationManager:
                             self.value.waypoints[name] = goal.model_copy(update={"name": name})
                         except ValueError:
                             self.warnings.append(f"Saved waypoint {name[:16]} is invalid and was skipped.")
+                    if "autonomous_speed_limits" in raw:
+                        try:
+                            self.value.autonomous_speed_limits = AutonomousSpeedLimits.model_validate(
+                                raw["autonomous_speed_limits"])
+                        except ValueError:
+                            self.warnings.append("Saved autonomous speed limits are invalid; using simulation defaults.")
             except (OSError, ValueError) as exc:
                 self.value = SavedConfiguration()
                 self.warnings.append(f"Configuration could not be restored ({type(exc).__name__}); using defaults. Original file preserved.")
@@ -94,9 +102,13 @@ class ConfigurationManager:
         if not self.grid.free(goal.x, goal.y):
             raise ValueError(f"{label} ({goal.x:.2f}, {goal.y:.2f}) lacks {self.grid.clearance:.3f} m footprint clearance; choose free space.")
 
-    def commit(self, home=None, waypoints=None):
-        candidate = SavedConfiguration(home=home if home is not None else self.value.home,
-                                       waypoints=waypoints if waypoints is not None else self.value.waypoints)
+    def commit(self, home=None, waypoints=None, autonomous_speed_limits=None):
+        candidate = SavedConfiguration(
+            home=home if home is not None else self.value.home,
+            waypoints=waypoints if waypoints is not None else self.value.waypoints,
+            autonomous_speed_limits=(autonomous_speed_limits if autonomous_speed_limits is not None
+                                     else self.value.autonomous_speed_limits),
+        )
         self.validate_pose(candidate.home, "Home")
         for name, goal in candidate.waypoints.items():
             self.validate_pose(goal, f"Waypoint {name}")
@@ -107,5 +119,6 @@ class ConfigurationManager:
 
     def snapshot(self):
         return {**self.value.model_dump(), "simulation": True, "map_id": self.grid.snapshot()["id"],
+                "autonomous_speed_limit_ranges": AUTONOMOUS_SPEED_LIMIT_RANGES,
                 "storage": "local-file" if self.store is not None else "memory",
                 "load_warnings": self.warnings}

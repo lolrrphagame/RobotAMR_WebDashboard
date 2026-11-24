@@ -22,6 +22,7 @@ def snapshot(robot):
             "trajectory": list(robot.state.trajectory), "navigation": robot.mission.snapshot(),
             "drive": {"max_rpm": config.max_rpm, "wheel_radius": config.wheel_radius,
                       "wheel_separation": config.wheel_separation, "encoder_cpr": config.encoder_cpr,
+                      "acceleration_rpm_s": config.acceleration_rpm_s,
                       "encoder_polarity": config.encoder_polarity, "chassis_size": CHASSIS_SIZE},
             "sensors": robot.sensors.snapshot(include_data=False),
             "operations": {"active": robot.operations.current, "queue_count": len(robot.operations.queue)},

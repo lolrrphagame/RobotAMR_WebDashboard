@@ -34,8 +34,9 @@ def interfaces():
 
 
 def diagnostics(robot):
-    unlimited = robot.drive.unlimited(robot.linear, robot.angular)
-    scale = max(1.0, max(map(abs, unlimited)) / robot.drive.config.max_rpm)
+    linear, angular, autonomous_limit_active = robot.drive_request()
+    unlimited = robot.drive.unlimited(linear, angular)
+    scale = robot.drive.wheel_limit_divisor(unlimited)
     limited_v, limited_w = robot.drive.forward(robot.targets())
     measured_v, measured_w = robot.drive.forward(robot.rpm)
     age = None
@@ -44,11 +45,14 @@ def diagnostics(robot):
     return {"source": "simulation", "model": "Acceleration-limited differential drive; not firmware PI",
             "motion": {"requested": {"linear": robot.linear, "angular": robot.angular},
                        "limited": {"linear": limited_v, "angular": limited_w},
-                       "measured": {"linear": measured_v, "angular": measured_w}},
+                       "measured": {"linear": measured_v, "angular": measured_w},
+                       "limit_active": autonomous_limit_active or scale > 1.0,
+                       "autonomous_limit_active": autonomous_limit_active},
             "saturation": {"active": scale > 1.0, "scale": 1 / scale,
                            "requested_rpm": unlimited, "limit_rpm": robot.drive.config.max_rpm},
             "safety": {**robot.safety, "command_age_ms": age, "manual_timeout_ms": 600,
-                       "autonomous_timeout_ms": 1500, "collision_guard": robot.collision_origin is not None},
+                       "autonomous_timeout_ms": 1500, "collision_guard": robot.collision_origin is not None,
+                       "autonomous_limits_blocked_reason": robot.autonomous_limits_blocked_reason()},
             "counters": dict(robot.counters), "interfaces": interfaces()}
 
 

@@ -20,7 +20,7 @@ export function MissionSummary({ data }: { data: Telemetry | null }) {
         </strong>
       </div>
       <div>
-        <span>OPERATING MODE</span>
+        <span>CONTROL AUTHORITY</span>
         <strong>{data?.mode ?? "OFFLINE"}</strong>
       </div>
       <div>

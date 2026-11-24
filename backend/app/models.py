@@ -47,15 +47,36 @@ class WaypointCommand(StrictModel):
         return self
 
 
+AUTONOMOUS_SPEED_LIMIT_RANGES = {
+    "max_linear": {"min": 0.01, "max": 0.18},
+    "max_angular": {"min": 0.1, "max": 1.2},
+}
+
+
+class AutonomousSpeedLimits(StrictModel):
+    """SI limits within the standalone straight-line and turn-in-place envelopes."""
+
+    max_linear: float = Field(strict=True, ge=AUTONOMOUS_SPEED_LIMIT_RANGES["max_linear"]["min"],
+                              le=AUTONOMOUS_SPEED_LIMIT_RANGES["max_linear"]["max"])
+    max_angular: float = Field(strict=True, ge=AUTONOMOUS_SPEED_LIMIT_RANGES["max_angular"]["min"],
+                               le=AUTONOMOUS_SPEED_LIMIT_RANGES["max_angular"]["max"])
+
+
 class ConfigurationCommand(StrictModel):
     type: Literal["configuration"]
-    action: Literal["set_home", "current_home", "reset_home"]
+    action: Literal["set_home", "current_home", "reset_home", "set_autonomous_speed_limits"]
     goal: Goal | None = None
+    autonomous_speed_limits: AutonomousSpeedLimits | None = None
 
     @model_validator(mode="after")
-    def validate_home(self):
+    def validate_action(self):
         if self.action == "set_home" and self.goal is None:
             raise ValueError("Select a Home pose first")
+        if self.action == "set_autonomous_speed_limits":
+            if self.autonomous_speed_limits is None or self.goal is not None:
+                raise ValueError("Provide both autonomous speed limits without a Home pose")
+        elif self.autonomous_speed_limits is not None:
+            raise ValueError("Use set_autonomous_speed_limits to change autonomous speed limits")
         return self
 
 

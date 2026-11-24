@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 from .drive import DifferentialDrive, DriveConfig, WHEEL_RADIUS, WHEEL_SEPARATION, ENCODER_CPR
 from .mission import MissionManager
-from .models import ControlCommand, NavigationCommand, Goal, WaypointCommand, ConfigurationCommand
+from .models import AutonomousSpeedLimits, ControlCommand, NavigationCommand, Goal, WaypointCommand, ConfigurationCommand
 from .navigation import OccupancyGrid
 from .state import HOME, RobotState
 from .telemetry import snapshot
@@ -161,6 +161,8 @@ class RobotSimulator:
                 self.operations.pause()
             return True
         if isinstance(command, ConfigurationCommand):
+            if command.action == "set_autonomous_speed_limits":
+                return self.configure_autonomous_speed_limits(command.autonomous_speed_limits)
             return self.configure_home(command)
         if isinstance(command, WaypointCommand):
             self.counters["configuration_commands"] += 1
@@ -225,6 +227,24 @@ class RobotSimulator:
         self.log("info", f"Home saved at ({home.x:.2f}, {home.y:.2f}), yaw {home.yaw:.2f} rad. Robot pose unchanged.")
         return True
 
+    def autonomous_limits_blocked_reason(self) -> str | None:
+        if self.autonomous_active:
+            return "Autonomous speed limits cannot change during a running or paused mission."
+        if self.owner is not None or self.linear or self.angular or any(self.rpm):
+            return "Release manual input and wait for the simulated robot to stop before saving."
+        return None
+
+    def configure_autonomous_speed_limits(self, limits: AutonomousSpeedLimits):
+        self.counters["configuration_commands"] += 1
+        if reason := self.autonomous_limits_blocked_reason():
+            raise ConfigurationConflict(reason)
+        try:
+            self.configuration.commit(autonomous_speed_limits=limits)
+        except ValueError as exc:
+            raise ConfigurationError(str(exc)) from exc
+        self.log("info", "Autonomous speed limits saved for simulation.")
+        return True
+
     def navigate(self, command, client):
         action = command.action
         if self.operations.active:
@@ -266,8 +286,18 @@ class RobotSimulator:
         self.log("info", f"Navigation {action}: {self.mission.reason}")
         return True
 
+    def drive_request(self) -> tuple[float, float, bool]:
+        """Apply both autonomous caps with one scale so the requested curvature is preserved."""
+        divisor = 1.0
+        if self.autonomous_active:
+            limits = self.configuration.value.autonomous_speed_limits
+            divisor = max(divisor, abs(self.linear) / limits.max_linear,
+                          abs(self.angular) / limits.max_angular)
+        return self.linear / divisor, self.angular / divisor, divisor > 1.0
+
     def targets(self):
-        return self.drive.inverse(self.linear, self.angular)
+        linear, angular, _ = self.drive_request()
+        return self.drive.inverse(linear, angular)
 
     def tick(self, dt=0.1):
         if not 0 < dt <= 1:

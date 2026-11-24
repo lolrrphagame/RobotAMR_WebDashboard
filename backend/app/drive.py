@@ -40,8 +40,11 @@ class DifferentialDrive:
     def inverse(self, linear: float, angular: float) -> list[float]:
         """Body twist -> wheel RPM; proportional saturation preserves curvature."""
         rpm = self.unlimited(linear, angular)
-        scale = max(1.0, max(abs(r) for r in rpm) / self.config.max_rpm)
+        scale = self.wheel_limit_divisor(rpm)
         return [r / scale for r in rpm]
+
+    def wheel_limit_divisor(self, rpm: list[float]) -> float:
+        return max(1.0, max(map(abs, rpm)) / self.config.max_rpm)
 
     def forward(self, rpm: list[float]) -> tuple[float, float]:
         left, right = [r * 2 * math.pi * self.config.wheel_radius / 60 for r in rpm]

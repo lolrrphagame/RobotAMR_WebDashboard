@@ -8,7 +8,9 @@ from uuid import uuid4
 from pathlib import Path
 from typing import Literal
 from fastapi import Request, FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Query
-from fastapi.responses import Response
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError
 from .models import command_adapter, ConfigurationCommand, WaypointCommand
@@ -59,6 +61,18 @@ origins = os.getenv("ALLOWED_ORIGINS", "http://127.0.0.1:5173,http://localhost:5
 app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["GET", "POST", "DELETE"], allow_headers=["Content-Type","X-CSRF-Token"], allow_credentials=True)
 
 app.add_middleware(SecurityMiddleware)
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(request: Request, exc: RequestValidationError):
+    try:
+        return await request_validation_exception_handler(request, exc)
+    except ValueError:
+        if request.url.path != "/api/configuration":
+            raise
+        # An invalid numeric input such as 1e400 cannot be echoed in JSON.
+        return JSONResponse(status_code=422, content={"detail": [
+            {key: error[key] for key in ("loc", "msg", "type")} for error in exc.errors()
+        ]})
 
 @app.get('/api/auth/session')
 async def auth_session(request:Request):

@@ -86,7 +86,7 @@ export function MotorDiagnostics({
                 <tr key={stage}>
                   <td>
                     {stage === "limited"
-                      ? "After wheel RPM limits"
+                      ? "After applicable speed limits"
                       : stage === "requested"
                         ? "Requested command"
                         : "Simulated measurement"}
@@ -99,6 +99,23 @@ export function MotorDiagnostics({
           </table>
         </div>
         <div className="diagnostic-state-row">
+          <span>
+            Control authority <strong>{data?.mode ?? "—"}</strong>
+          </span>
+          <span>
+            Motion limiting{" "}
+            <strong>
+              {diag ? (diag.motion.limit_active ? "Active" : "Inactive") : "—"}
+            </strong>
+          </span>
+          <span>
+            Autonomous speed cap{" "}
+            <strong>
+              {diag
+                ? diag.motion.autonomous_limit_active ? "Active" : "Inactive"
+                : "—"}
+            </strong>
+          </span>
           <span>
             RPM saturation{" "}
             <strong>

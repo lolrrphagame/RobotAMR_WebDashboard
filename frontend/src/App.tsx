@@ -44,6 +44,7 @@ const NavigationPage = lazy(() =>
 );
 import { MissionSummary } from "./components/MissionSummary";
 import { ManualControl } from "./components/ManualControl";
+import { MotionSettings } from "./components/MotionSettings";
 const RpmChart = lazy(() =>
   import("./components/RpmChart").then((m) => ({ default: m.RpmChart })),
 );
@@ -101,7 +102,7 @@ function Dashboard() {
           </span>
         </a>
         <div className="workspace-label">
-          WORKSPACE <span>PHASE 4B</span>
+          WORKSPACE <span>PHASE 5E.1</span>
         </div>
         <nav aria-label="Main navigation">
           {pages.map(({ name, icon: Icon }) => (
@@ -181,7 +182,7 @@ function Dashboard() {
               <strong>Simulation environment active.</strong> All telemetry and
               controls are simulated. ROS 2, UART and GPIO are disabled.
             </span>
-            <span className="banner-phase">PHASE 4B</span>
+            <span className="banner-phase">PHASE 5E.1</span>
           </div>
           {(!connected || error) && (
             <div className="connection-alert" role="status">
@@ -204,9 +205,12 @@ function Dashboard() {
                 <MissionSummary data={live} />
                 {live?.mode === "AUTONOMOUS" && (
                   <div className="simulation-banner">
-                    Autonomous mode owns motion. Cancel the mission on
-                    Navigation or press STOP before manual driving.{" "}
-                    <button className="navigation-stop" onClick={stop}>
+                    Manual driving is locked while an autonomous mission owns motion.
+                    <button
+                      className="navigation-stop"
+                      disabled={!operator}
+                      onClick={stop}
+                    >
                       STOP
                     </button>
                   </div>
@@ -230,7 +234,7 @@ function Dashboard() {
                       <span data-testid="operating-mode">
                         {live?.mode ?? "AWAITING CONNECTION"}
                       </span>
-                      <span>SIMULATED</span>
+                      <span>Control authority</span>
                     </div>
                   </article>
                   <article className="metric panel">
@@ -291,9 +295,8 @@ function Dashboard() {
                   </div>
                   <ManualControl
                     readOnly={!operator}
-                    connected={
-                      connected && operator && live?.mode !== "AUTONOMOUS"
-                    }
+                    connected={connected}
+                    authority={live?.mode}
                     send={send}
                     stop={stop}
                     release={release}
@@ -459,6 +462,7 @@ function Dashboard() {
             {page === "Settings" && (
               <>
                 <ThemePreferences />
+                <MotionSettings data={live} operator={operator} />
                 <HomeConfiguration
                   readOnly={!operator}
                   data={live}
@@ -474,15 +478,11 @@ function Dashboard() {
                   </div>
                   <div className="detail-grid">
                     {[
-                      ["Wheel radius", "0.0435 m"],
-                      ["Wheel speed limit", "40 RPM per wheel"],
-                      ["Chassis", "250 × 250 mm · two wheels + caster"],
                       [
                         "Encoder polarity (raw)",
                         live?.drive.encoder_polarity.join(", ") ?? "+1, -1",
                       ],
                       ["Autonomous heartbeat timeout", "1.5 s"],
-                      ["Wheel separation", "0.300 m"],
                       ["Encoder resolution", "≈ 3,960 counts/rev"],
                       ["Telemetry rate", "10 Hz"],
                       ["Command timeout", "600 ms"],
@@ -517,7 +517,7 @@ function Dashboard() {
                 ? `${Math.floor(live.uptime / 60)}m ${live.uptime % 60}s`
                 : "—"}
               <span className="footer-divider">|</span>
-              <CircleHelp size={14} /> Phase 4B · v4.0b
+              <CircleHelp size={14} /> Phase 5E.1
             </span>
           </footer>
         </div>

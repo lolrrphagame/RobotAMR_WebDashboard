@@ -1,6 +1,31 @@
-# PBL4 AMR Mission Control — Phase 5D · Light / Dark / System
+# PBL4 AMR Mission Control — Phase 5E.1 · Control Authority and Autonomous Speed Limits
 
 A simulation-only industrial robot dashboard built with React, TypeScript, Vite, Tailwind CSS, Recharts and FastAPI. No ROS, serial, GPIO, camera or motor interfaces are imported or opened. All controls, encoder readings and health values are simulated.
+
+## Phase 5E.1 · Control authority and autonomous speed limits
+
+Open **Settings → Motion Control & Speed Limits** to see the simulator's current control authority, configured limits and drive constraints. **STANDBY** means no motion owner. **MANUAL** means an Operator owns hold-to-drive control. **AUTONOMOUS** means Navigation or Mission Operations has reserved motion, including during a pause or a WAIT step. Planning a path leaves the robot in standby. Starting or resuming a mission requires an explicit command.
+
+Manual Control keeps its own linear and angular sliders. Release a direction to stop. While a mission reserves autonomous motion, the backend rejects manual drive commands and the dashboard locks the directions and sliders. Authorized Operators can still issue STOP.
+
+| Autonomous cap | Default | Accepted simulation range |
+| --- | ---: | ---: |
+| Maximum linear speed | 0.13 m/s | 0.01–0.18 m/s |
+| Maximum angular speed | 0.8 rad/s | 0.1–1.2 rad/s |
+
+Observers can read the limits. Operators can save them while the simulated wheels are stationary, manual input has been released, and there is no running or paused mission. Saves use the existing atomic version-1 robot configuration file. Older version-1 files load with the defaults when the new field is absent. Invalid saved limits use the defaults and raise a load warning while valid Home and waypoint entries are restored.
+
+The existing point follower calculates its own velocity request. When either configured cap is reached, the simulator scales the linear and angular targets by the same factor to preserve commanded curvature. The differential drive then scales both wheel targets as needed to stay within **±40 RPM per wheel**. At the current wheel radius and separation, that cap allows about **0.182 m/s** in a straight line or **1.215 rad/s** turning in place. Raising the configured caps above the point follower's current request has no effect. Simulated measured velocity responds according to the existing wheel acceleration model and can lag changes in the targets.
+
+`GET /api/configuration` returns `autonomous_speed_limits` and the accepted `autonomous_speed_limit_ranges`. Send both limits with `POST /api/configuration` or the Operator telemetry WebSocket:
+
+```json
+{"type":"configuration","action":"set_autonomous_speed_limits","autonomous_speed_limits":{"max_linear":0.1,"max_angular":0.6}}
+```
+
+The POST returns **403** for insufficient privileges, **409** for motion or mission conflicts, **422** for invalid values and **400** for storage errors. The live telemetry `mode` remains the authority field. `diagnostics.motion` exposes `requested`, `limited` and simulated `measured` body velocity in m/s and rad/s, plus `limit_active` and `autonomous_limit_active`. `diagnostics.saturation` describes wheel RPM limiting after the autonomous caps are applied. `diagnostics.safety.autonomous_limits_blocked_reason` explains when the motion state blocks updates. Settings displays authority and configured limits. Diagnostics displays authority, simulated motion and active limiting.
+
+**This phase is simulation-only.** Navigation uses the local A* planner and point follower. ROS 2, Nav2, UART, GPIO and the motor controller remain disconnected.
 
 ## Phase 5D: appearance preferences
 
@@ -351,7 +376,7 @@ Browser tests start isolated frontend/backend servers on ports **15173 and 18000
 - **Missions:** named mission builder, templates, bounded queue, explicit execution, persistent history and stored-record analytics.
 - **Sensors:** a deterministic virtual LiDAR radar view and a clearly labeled, disconnected camera placeholder. Navigation offers an optional simulated laser-point overlay.
 - **Diagnostics:** Motors, System Health, Communication and Events tabs with simulated measurements, bounded history, honest unavailable hardware fields, filtering and CSV exports.
-- **Settings:** saved Home controls and read-only robot geometry/simulation parameters. Home can also be configured directly from Navigation.
+- **Settings:** appearance preferences, current control authority, autonomous speed limits, saved Home controls and read-only simulation parameters. Home can also be configured directly from Navigation.
 
 Charts retain the most recent 150 samples (approximately 15 seconds at 10 Hz). The virtual robot starts stationary at its validated saved Home (default **1.0 m, 1.0 m, 0 rad**); hold a direction to see target and actual RPM responses. Wheel response uses a **60 RPM/s slew limit** for smooth acceleration, deceleration and reversal. Both target and actual speeds stay within **±40 RPM**. This is a kinematic model, not a firmware PI implementation or a measured hardware model. Health values are synthetic. Event history is bounded to 60 entries and is not persisted.
 
@@ -376,7 +401,7 @@ On **Navigation**, choose a map destination and heading, then select **Set Selec
 
 Every Home update is checked against the map and the same footprint clearance as navigation. Home changes are rejected while a mission is **running or paused**, including through the API; rejection does not pause the mission or change its owner. A change never teleports or resets the current robot, encoders, wheels or trajectory. Return Home always plans to the currently saved Home. Only a **new backend session** initializes pose at saved Home, stationary with zero encoders.
 
-The default configuration file is **`backend/data/robot-config.json`**, excluded from Git. It stores version 1, Home, and A/B/C waypoint poses/headings, not measured telemetry or active missions. Override its location using an absolute `ROBOT_CONFIG_PATH` when starting Uvicorn. `ROBOT_CONFIG_PATH=:memory:` explicitly disables persistence, primarily for isolated browser tests.
+The default configuration file is **`backend/data/robot-config.json`**, excluded from Git. The version-1 file stores Home, A/B/C waypoint poses/headings and autonomous speed limits. Override its location using an absolute `ROBOT_CONFIG_PATH` when starting Uvicorn. `ROBOT_CONFIG_PATH=:memory:` explicitly disables persistence, primarily for isolated browser tests.
 
 Saves write a temporary file in the same directory, flush/fsync it, then atomically replace the destination. In-memory configuration is updated only after successful replacement. Permission/disk failures report an error and leave the previous configuration in memory and on disk. Use a **single backend worker/process** per configuration file; cross-process editing is not supported. Local storage must be writable. No system installation is needed.
 
@@ -537,12 +562,12 @@ Send these over the existing WebSocket, with `heartbeat` messages every 150 ms w
 
 ## Safety behavior
 
-All motion command handling remains in memory; only Home and waypoint configuration is written to local storage. There are no motor, UART, GPIO or ROS dependencies.
+Live motion commands and ownership stay in memory. Home, waypoints and autonomous speed limits are saved as robot configuration.
 
 - Frontend sends a control heartbeat every 150 ms only while a direction is held.
 - Manual pointer release/cancel, lost pointer capture, keyboard release, focus loss, hidden tab, page change, slider change and control unmount send an owner-scoped `release`. This stops manual motion without cancelling an autonomous mission or another client’s command. Page exit/unmount closes the controller connection.
 - Manual motion stops immediately on release, owning-controller disconnect, invalid input or the **600 ms** manual-command watchdog. Heartbeats alone cannot keep a released manual command alive. The outer simulation loop evaluates watchdogs approximately every 100 ms.
-- Autonomous missions reserve motion against manual commands while **running or paused**. Pause stops simulated wheels immediately. Cancel/STOP cancel the mission and zero targets and actual RPM immediately; this intentional safety stop bypasses ordinary deceleration. Any connected client may issue STOP.
+- Autonomous missions reserve motion against manual commands while **running or paused**. Pause stops simulated wheels immediately. Cancel/STOP cancel the mission and immediately zero targets and actual RPM, bypassing ordinary deceleration. Any authorized Operator can issue STOP.
 - Autonomous missions receive a **150 ms** controller heartbeat and pause after **1.5 s** without it, or when the owning WebSocket disconnects. Reconnecting does **not** resume navigation automatically. Resume explicitly replans remaining legs from the actual pose; a new client may resume after the prior owner disconnects. Background-tab timer throttling can also safely pause a mission.
 - Collision checking covers manual and autonomous motion. Each physics substep uses a continuous swept-disk check against occupied/unknown cells and map boundaries; path planning uses the same check. This detects grazing corners between the old sample positions. The radius is derived from the **250 × 250 mm** chassis: `hypot(0.125, 0.125) + 0.025 = 0.201777 m`, covering every chassis heading with a 25 mm margin.
 - **Manual collision:** stop wheels/targets immediately, keep mission **IDLE**, and emit a warning identifying pose, required clearance and recovery guidance. The colliding held command is inhibited until input release or a changed command, preventing repeated restarts against the obstacle.
@@ -560,8 +585,8 @@ All motion command handling remains in memory; only Home and waypoint configurat
 | `GET /api/health` | Service health, `simulation: true`, `hardware_enabled: false` |
 | `GET /api/robot/status` | Current shared simulator snapshot |
 | `GET /api/map` | Static row-major simulated occupancy grid with origin, resolution, frame and clearance radius |
-| `GET /api/configuration` | Saved Home, A/B/C waypoints, storage mode and startup validation warnings |
-| `POST /api/configuration` | Validated `set_home`, `current_home`, `reset_home` commands |
+| `GET /api/configuration` | Saved Home, A/B/C waypoints, autonomous speed limits and ranges, storage mode and startup validation warnings |
+| `POST /api/configuration` | Validated `set_home`, `current_home`, `reset_home` and `set_autonomous_speed_limits` commands |
 | `POST /api/waypoints` | Validated save/delete waypoint commands |
 | `GET /api/events?level=warning&q=collision&format=csv` | Filtered bounded event export (`format=json` by default) |
 | `GET /api/diagnostics/history?limit=600&format=csv` | Retained compact telemetry export (`format=json` by default) |
@@ -619,7 +644,7 @@ backend/
   app/navigation.py             Occupancy grid, footprint collision checks, A*
   app/mission.py                Waypoints, mission lifecycle and path follower
   app/telemetry.py               Shared HTTP/WebSocket state serialization
-  app/configuration.py           Validated Home/waypoints and atomic persistence
+  app/configuration.py           Validated Home/waypoints/speed limits and atomic persistence
   app/diagnostics.py             Simulated measurements and future interface contracts
   app/exports.py                 Event filtering and CSV formatting
   app/sensors/contracts.py       Transport-neutral sensor envelope / adapter protocol

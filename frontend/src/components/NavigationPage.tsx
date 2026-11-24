@@ -262,6 +262,12 @@ export function NavigationPage({
                 <Square size={17} fill="currentColor" />
                 STOP · CANCEL ALL MOTION
               </button>
+              {connected && data?.mode === "MANUAL" && (
+                <p className="muted">
+                  Manual control owns motion. Release manual input to start
+                  navigation.
+                </p>
+              )}
               <div className="mission-details">
                 <div>
                   <span>Mission state</span>
@@ -286,7 +292,7 @@ export function NavigationPage({
                   </strong>
                 </div>
                 <div>
-                  <span>Body velocity</span>
+                  <span>Simulated body velocity</span>
                   <strong>
                     {data
                       ? `${data.linear_velocity.toFixed(2)} m/s · ${data.angular_velocity.toFixed(2)} rad/s`
@@ -310,7 +316,12 @@ export function NavigationPage({
               </p>
             </div>
           </section>
-          <HomeConfiguration data={data} selected={goal} send={send} />
+          <HomeConfiguration
+            data={data}
+            selected={goal}
+            readOnly={!connected}
+            send={send}
+          />
           <section className="panel waypoint-panel">
             <div className="panel-heading">
               <h2>

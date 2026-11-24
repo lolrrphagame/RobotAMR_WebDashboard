@@ -79,6 +79,19 @@ def test_client_role_claim_and_invalid_cookie_never_grant_access(secured):
     assert client.post('/api/configuration',json={},headers={'Origin':'https://robot.test'}).status_code==403
 
 
+def test_observer_can_read_but_cannot_save_autonomous_speed_limits(secured):
+    client, _ = secured
+    headers = sign_in(client, 'viewer')
+    baseline = client.get('/api/configuration').json()['autonomous_speed_limits']
+    assert baseline == {'max_linear': 0.13, 'max_angular': 0.8}
+    response = client.post('/api/configuration', headers=headers, json={
+        'type': 'configuration', 'action': 'set_autonomous_speed_limits',
+        'autonomous_speed_limits': {'max_linear': 0.06, 'max_angular': 0.3},
+    })
+    assert response.status_code == 403
+    assert client.get('/api/configuration').json()['autonomous_speed_limits'] == baseline
+
+
 @pytest.mark.parametrize('name', ['alice', 'viewer'])
 @pytest.mark.parametrize('path', ['/ws/telemetry','/ws/sensors'])
 def test_expiration_closes_both_roles_and_both_streams(secured,name,path):
@@ -96,6 +109,8 @@ def test_expiration_closes_both_roles_and_both_streams(secured,name,path):
     {'type': 'stop'}, {'type': 'release'}, {'type': 'heartbeat'}, {'type': 'control', 'linear': .1},
     {'type': 'navigation', 'action': 'home'}, {'type': 'operations', 'action': 'start_next'},
     {'type': 'configuration', 'action': 'reset_home'},
+    {'type': 'configuration', 'action': 'set_autonomous_speed_limits',
+     'autonomous_speed_limits': {'max_linear': 0.06, 'max_angular': 0.3}},
 ])
 def test_observer_socket_rejects_every_control_category(secured, command):
     client, _ = secured

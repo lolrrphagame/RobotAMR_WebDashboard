@@ -118,8 +118,9 @@ export function useRobot() {
           const next = message as Telemetry;
           const generation = next.diagnostics.safety.stop_generation ?? 0;
           if (
-            stopGeneration.current !== null &&
-            stopGeneration.current !== generation
+            next.mode === "AUTONOMOUS" ||
+            (stopGeneration.current !== null &&
+              stopGeneration.current !== generation)
           )
             command.current = { type: "stop" };
           stopGeneration.current = generation;

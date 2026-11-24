@@ -73,7 +73,9 @@ export function HomeConfiguration({
         </div>
         {locked && data && (
           <p className="home-locked">
-            Cancel the running or paused mission before changing Home.
+            {readOnly
+              ? "An Operator can change Home."
+              : "Cancel the running or paused mission before changing Home."}
           </p>
         )}
         {data?.configuration.load_warnings.map((warning, index) => (

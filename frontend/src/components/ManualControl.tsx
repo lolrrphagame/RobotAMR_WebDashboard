@@ -6,15 +6,17 @@ import {
   Square,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import type { Command } from "../types";
+import type { Command, MotionAuthority } from "../types";
 export function ManualControl({
   connected,
+  authority,
   readOnly = false,
   send,
   stop,
   release: releaseInput,
 }: {
   connected: boolean;
+  authority?: MotionAuthority;
   readOnly?: boolean;
   send: (c: Command) => void;
   stop: () => void;
@@ -24,14 +26,19 @@ export function ManualControl({
   const [angular, setAngular] = useState(0.6);
   const [active, setActive] = useState("");
   const held = useRef(false);
+  const canDrive = connected && !readOnly && authority !== "AUTONOMOUS";
   const release = () => {
     held.current = false;
     setActive("");
     releaseInput();
   };
   useEffect(() => {
-    if (!connected) setActive("");
-  }, [connected]);
+    if (!canDrive && held.current) {
+      held.current = false;
+      setActive("");
+      releaseInput();
+    }
+  }, [canDrive, releaseInput]);
   useEffect(() => {
     const halt = () => {
       if (!held.current) return;
@@ -77,14 +84,17 @@ export function ManualControl({
         </div>
         <span className="tag">HOLD TO DRIVE</span>
       </div>
-      <p className="muted">Press and hold a direction. Release to stop.</p>
+      <p className="muted">
+        Press and hold a direction. Release to stop. Speed sliders apply to
+        manual driving.
+      </p>
       <div className="dpad">
         {buttons.map(({ id, label, Icon, v, w }) => (
           <button
             key={id}
             className={`drive ${id} ${active === id ? "active" : ""}`}
             aria-label={label}
-            disabled={!connected}
+            disabled={!canDrive}
             onContextMenu={(e) => e.preventDefault()}
             onPointerDown={(e) => {
               if (e.button !== 0) return;
@@ -113,7 +123,7 @@ export function ManualControl({
         ))}
         <button
           className="stop"
-          disabled={readOnly}
+          disabled={!connected || readOnly}
           onClick={() => {
             release();
             stop();
@@ -137,6 +147,7 @@ export function ManualControl({
         max="0.18"
         step="0.01"
         value={linear}
+        disabled={!canDrive}
         onChange={(e) => {
           release();
           setLinear(Number(e.target.value));
@@ -159,6 +170,7 @@ export function ManualControl({
         max="1.2"
         step="0.1"
         value={angular}
+        disabled={!canDrive}
         onChange={(e) => {
           release();
           setAngular(Number(e.target.value));
